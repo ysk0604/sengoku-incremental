@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>戦国インクリメンタル</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="header">
+    <div class="header-house">
+      <div class="house-line">
+        <span id="house-title" class="house-title"></span>
+        <span id="lord-trait" class="lord-trait"></span>
+      </div>
+      <div class="reign-line">
+        <span id="reign-text" class="reign-text"></span>
+        <span id="growth-text" class="growth-text"></span>
+      </div>
+      <div class="retire-line">
+        <button id="retire-button" class="btn btn-small retire-button">隠居する</button>
+        <span id="retire-chance" class="retire-chance hidden">隠居の好機</span>
+        <span id="save-status" class="save-status"></span>
+      </div>
+    </div>
+
+    <div class="header-kokudaka">
+      <span class="label">石高</span>
+      <span id="kokudaka-value" class="kokudaka-value">0</span>
+      <span class="unit">石</span>
+    </div>
+
+    <div class="header-resources">
+      <div class="res" data-res="rice">
+        <span class="res-name">米</span>
+        <span class="res-value" id="res-rice">0</span>
+        <span class="res-rate" id="rate-rice"></span>
+      </div>
+      <div class="res" data-res="gold">
+        <span class="res-name">金</span>
+        <span class="res-value" id="res-gold">0</span>
+        <span class="res-rate" id="rate-gold"></span>
+      </div>
+      <div class="res" data-res="troops">
+        <span class="res-name">兵</span>
+        <span class="res-value" id="res-troops">0</span>
+        <span class="res-rate" id="rate-troops"></span>
+      </div>
+      <div class="res" data-res="power">
+        <span class="res-name">戦力</span>
+        <span class="res-value" id="power-value">0</span>
+      </div>
+      <div class="res" data-res="merit">
+        <span class="res-name">功績</span>
+        <span class="res-value" id="merit-value">0</span>
+      </div>
+      <div class="res" data-res="prestige">
+        <span class="res-name">家格倍率</span>
+        <span class="res-value" id="prestige-value">×1</span>
+        <span class="res-rate" id="prestige-total"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 侵攻の警告（どのタブでも表示。押すと地図へ） -->
+  <div id="invasion-alert" class="invasion-alert hidden" role="alert">
+    <span id="invasion-alert-text"></span>
+    <span class="invasion-alert-go">地図を開く ›</span>
+  </div>
+
+  <div id="layout">
+    <nav id="tabs">
+      <button class="tab active" data-tab="domestic">内政</button>
+      <button class="tab" data-tab="generals">武将</button>
+      <button class="tab" data-tab="map">地図</button>
+      <button class="tab" data-tab="lineage">家系</button>
+      <button class="tab" data-tab="settings">設定</button>
+    </nav>
+
+    <main id="main">
+      <section id="tab-domestic" class="tab-panel active">
+        <div class="domestic-top">
+          <div class="click-area">
+            <button id="click-button" class="click-button">
+              <span class="click-label">開墾する</span>
+              <span id="click-amount" class="click-amount"></span>
+            </button>
+          </div>
+          <div class="bulk-area">
+            <span class="bulk-label">一括建設</span>
+            <div id="bulk-buttons" class="bulk-buttons"></div>
+          </div>
+          <!-- 城の画像（ステップ6で画像に差し替え。今はダミー） -->
+          <div id="castle-image" class="castle-image" data-look="0">
+            <span id="castle-look" class="castle-look">砦</span>
+            <span id="castle-level" class="castle-level">城郭 Lv0</span>
+          </div>
+        </div>
+        <div id="facility-list" class="facility-list"></div>
+      </section>
+
+      <section id="tab-generals" class="tab-panel">
+        <div class="generals-top">
+          <div class="recruit-area">
+            <button id="recruit-button" class="btn recruit-button">武将を登用する</button>
+            <div id="recruit-cost" class="recruit-cost"></div>
+          </div>
+          <div class="generals-summary">
+            <div>配下 <span id="general-count">0</span>人（内政担当 <span id="domestic-count">0</span>人）</div>
+            <div>内政補正 <span id="domestic-mult" class="domestic-mult">×1</span><span class="note">（米・金・兵の生産すべてにかかる）</span></div>
+          </div>
+        </div>
+        <div id="general-list" class="general-list"></div>
+        <div id="general-empty" class="general-empty">まだ武将がいません。金を貯めて登用しましょう。</div>
+      </section>
+
+      <section id="tab-map" class="tab-panel">
+        <div class="map-layout">
+          <div class="map-column">
+            <div class="map-header">
+              <span id="map-title" class="map-title"></span>
+              <span id="map-hint" class="map-hint"></span>
+              <span id="heirloom-line" class="heirloom-line"></span>
+            </div>
+            <div class="map-frame">
+              <svg id="map-svg" class="map-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+            <div id="far-powers" class="far-powers"></div>
+            <div id="pacified-maps" class="pacified-maps hidden"></div>
+          </div>
+
+          <aside class="map-side">
+            <div id="battle-list" class="battle-list"></div>
+
+            <h3>部隊編成</h3>
+            <div class="side-row"><span id="origin-label">本拠地の待機兵</span> <span id="standby-troops" class="side-value">0</span> 人</div>
+            <div class="side-row">
+              <label for="form-troops">兵数</label>
+              <span id="form-troops-value" class="side-value">0</span> 人
+            </div>
+            <input type="range" id="form-troops" class="form-troops" min="0" max="0" step="1" value="0">
+            <div class="form-quick">
+              <button class="btn btn-small" data-ratio="0.25">1/4</button>
+              <button class="btn btn-small" data-ratio="0.5">半数</button>
+              <button class="btn btn-small" data-ratio="1">全軍</button>
+            </div>
+            <div class="side-row">
+              <label for="form-general">武将</label>
+              <select id="form-general" class="form-general"></select>
+            </div>
+            <div class="side-row">部隊の戦力 <span id="form-power" class="side-value power-text">0</span></div>
+            <div id="order-status" class="order-status"></div>
+            <button id="order-cancel" class="btn btn-small">選択を取り消す</button>
+
+            <div id="recover-box" class="recover-box hidden">
+              <h3>旧領</h3>
+              <div id="recover-info" class="note"></div>
+              <button id="recover-button" class="btn recover-button">旧領を一括回復</button>
+            </div>
+
+            <h3>出陣中の部隊 <span id="unit-count" class="unit-count"></span></h3>
+            <div id="unit-list" class="unit-list"></div>
+            <div id="unit-empty" class="note">出陣中の部隊はありません。</div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="tab-lineage" class="tab-panel">
+        <div class="lineage-top">
+          <div class="lineage-stat">
+            <span class="label">累計家格</span>
+            <span id="lineage-prestige" class="lineage-big">0</span>
+          </div>
+          <div class="lineage-stat">
+            <span class="label">家格倍率</span>
+            <span id="lineage-mult" class="lineage-big">×1</span>
+            <span class="note">（全生産にかかる）</span>
+          </div>
+          <div class="lineage-stat">
+            <span class="label">今継承すると</span>
+            <span id="lineage-gain" class="lineage-big">家格 +0</span>
+          </div>
+        </div>
+
+        <h3>歴代当主</h3>
+        <table class="lineage-table">
+          <thead>
+            <tr><th>代</th><th>当主</th><th>特性</th><th>その代の石高</th><th>得た家格</th><th>治世</th></tr>
+          </thead>
+          <tbody id="lineage-rows"></tbody>
+        </table>
+
+        <h3>家宝</h3>
+        <div id="heirloom-list" class="heirloom-list"></div>
+      </section>
+
+      <section id="tab-settings" class="tab-panel">
+        <h2>設定</h2>
+        <div class="settings-row">
+          <button id="save-button" class="btn">今すぐセーブ</button>
+          <span class="note">10秒ごとに自動でセーブされます。</span>
+        </div>
+        <div class="settings-row">
+          <button id="reset-button" class="btn btn-danger">データ削除</button>
+          <span class="note">セーブデータを消して最初からやり直します。</span>
+        </div>
+        <div id="dev-tools" class="dev-tools hidden">
+          <h3>開発用</h3>
+          <div class="settings-row">
+            <button id="dev-reset-map" class="btn">地図をリセット</button>
+            <span class="note">敵城をすべて元に戻します。施設・資源・武将はそのままで、守備兵と出陣中の兵は本拠地の待機兵に戻ります。</span>
+          </div>
+          <div class="settings-row">
+            <button id="dev-allow-retire" class="btn">すぐ隠居できるようにする</button>
+            <span class="note">治世を60秒まで進めます（家督継承をすぐ試すためのボタンです）。</span>
+          </div>
+          <div class="settings-row">
+            <button id="dev-clear-stage" class="btn">次の段階へ</button>
+            <span class="note">今の段階のボスを倒したことにします（家宝も手に入ります）。</span>
+          </div>
+          <div class="settings-row">
+            <button id="dev-invade" class="btn">今すぐ侵攻させる</button>
+            <span id="dev-invade-note" class="note">次の侵攻を待たずに、敵を攻めてこさせます。</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 合戦結果 -->
+  <div id="result-modal" class="modal hidden">
+    <div class="modal-box">
+      <div id="result-image" class="battle-image large">合戦</div>
+      <h2 id="result-title" class="result-title"></h2>
+      <div id="result-body" class="result-body"></div>
+      <button id="result-close" class="btn result-close">閉じる</button>
+    </div>
+  </div>
+
+  <!-- 家督継承 -->
+  <div id="succession-modal" class="modal succession hidden">
+    <div class="modal-box succession-box">
+      <div id="succession-body"></div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/format.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/systems.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
