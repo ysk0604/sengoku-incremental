@@ -119,6 +119,7 @@ button {
   min-width: 64px;
 }
 .res[data-res="prestige"] .res-value { color: var(--gold); }
+.res[data-res="virtue"] .res-value { color: var(--gold); }
 .res-name { font-size: 12px; color: var(--ink-soft); }
 .res-value { font-size: 20px; font-weight: bold; font-variant-numeric: tabular-nums; }
 .res-rate { font-size: 12px; color: var(--gold); height: 15px; }
@@ -839,3 +840,49 @@ button {
 .note { font-size: 13px; color: var(--ink-soft); }
 .dev-tools { margin-top: 24px; padding-top: 8px; border-top: 1px dashed var(--line); }
 .dev-tools h3 { font-size: 15px; color: var(--ink-soft); margin: 0 0 10px; }
+
+/* ---- 家訓 ---- */
+.precept-open { margin-left: 6px; border-color: var(--gold); }
+.precept-box { width: 980px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow-y: auto; }
+.succession-box.wide { width: 980px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.succession-precepts { margin: 8px 0; }
+.precept-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+.precept-virtue { font-size: 18px; font-weight: bold; color: var(--gold); white-space: nowrap; }
+.precept-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.precept-branch { padding: 6px; background: var(--paper); border: 1px solid var(--line); }
+.precept-branch-name { font-size: 13px; letter-spacing: 0.3em; color: var(--ink-soft); border-bottom: 1px solid var(--line);
+  margin-bottom: 6px; padding-bottom: 2px; }
+.precept-card { padding: 6px 8px; margin-bottom: 6px; background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--line); }
+.precept-card.learned { border-left-color: var(--gold); background: #fffaf0; }
+.precept-card.locked { opacity: 0.45; }
+.precept-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.precept-name { font-weight: bold; }
+.precept-level { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.precept-now { font-size: 12px; color: var(--vermilion-dark); }
+.precept-next, .precept-req { font-size: 12px; color: var(--ink-soft); }
+.precept-learn { margin-top: 4px; width: 100%; }
+
+/* 自動普請 */
+.auto-build { display: flex; align-items: center; gap: 4px; font-size: 14px; margin-left: 8px; cursor: pointer; }
+.auto-build.hidden { display: none; }
+
+/* セーブの書き出し・読み込み */
+.settings-heading { font-size: 16px; margin: 24px 0 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.transfer { display: flex; gap: 16px; margin-top: 10px; }
+.transfer-col { flex: 1; min-width: 0; }
+.save-text { width: 100%; height: 110px; resize: vertical; font-family: monospace; font-size: 11px;
+  background: var(--paper-light); border: 1px solid var(--line); color: var(--ink); user-select: text; word-break: break-all; }
+/* 家訓の画面は縦に長いので、進む・閉じるボタンを下に貼り付けておく */
+.succession-box.wide .succession-nav { position: sticky; bottom: -22px; margin: 12px -28px -22px; padding: 10px 28px;
+  background: var(--paper-light); border-top: 1px solid var(--line); }
+.precept-foot { position: sticky; bottom: -18px; margin: 12px -22px -18px; padding: 10px 22px; text-align: center;
+  background: var(--paper-light); border-top: 1px solid var(--line); }
+.precept-foot .btn { min-width: 120px; }
+
+/* 幅が狭いとき（1024px など）はヘッダーを詰める */
+@media (max-width: 1200px) {
+  #header { gap: 14px; padding: 10px 16px; }
+  .header-kokudaka { min-width: 150px; }
+  .header-resources { gap: 8px; }
+  .res { min-width: 54px; }
+}

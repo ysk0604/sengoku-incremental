@@ -200,6 +200,36 @@ Game.data = {
     { id: 'crown', name: '天下の宝冠', desc: '家格倍率 ×1.5' },
   ],
 
+  // ---- 家訓（数値は config.js の PRECEPTS）----
+  // 系統ごとに列で並べる。系統の中は前提の家訓の下に字下げして並べる
+  // （ステップ4dの家訓は、ここと config に足せば同じ画面に並ぶ）
+  PRECEPT_BRANCHES: [
+    { id: 'domestic', name: '内政' },
+    { id: 'military', name: '軍事' },
+    { id: 'talent', name: '人材' },
+    { id: 'house', name: '家督' },
+    { id: 'automation', name: '自動化' },
+    { id: 'strategy', name: '軍略' },
+  ],
+  PRECEPTS: [
+    { id: 'rakuichi', branch: 'domestic', name: '楽市楽座' },
+    { id: 'kenchi', branch: 'domestic', name: '検地' },
+    { id: 'fukoku', branch: 'domestic', name: '富国' },
+    { id: 'heinou', branch: 'military', name: '兵農分離' },
+    { id: 'teppou', branch: 'military', name: '鉄砲隊' },
+    { id: 'joubi', branch: 'military', name: '常備兵' },
+    { id: 'touyou', branch: 'talent', name: '人材登用' },
+    { id: 'kashindan', branch: 'talent', name: '家臣団' },
+    { id: 'homare', branch: 'house', name: '家名の誉れ' },
+    { id: 'eisai', branch: 'house', name: '英才教育' },
+    { id: 'ando', branch: 'automation', name: '旧領安堵' },
+    { id: 'fushin', branch: 'automation', name: '自動普請' },
+    { id: 'kaidou', branch: 'strategy', name: '街道整備' },
+    { id: 'monomi', branch: 'strategy', name: '物見櫓' },
+    { id: 'geigeki', branch: 'strategy', name: '自動迎撃' },
+    { id: 'saihai', branch: 'strategy', name: '采配の極意' },
+  ],
+
   // ---- 当主 ----
   // 当主の名（姓は家名から取る）。実在の有名武将の名は入れない
   LORD_GIVEN_NAMES: [

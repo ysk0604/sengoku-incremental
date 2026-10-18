@@ -5,8 +5,7 @@ Game.config = {
   // ---- ゲームループ ----
   TICK_MS: 100,             // 更新間隔（1秒10ティック）
   MAX_TICK_SECONDS: 1,      // 1ティックで進める最大秒数（スリープ復帰などで時間が飛ばないように）
-  DEV_SPEED: 1,             // 開発用の速度倍率（設定画面の実装はステップ5以降）
-  DEV_TOOLS: true,          // 設定タブに開発用ボタンを表示する（公開時は false）
+  DEV_SPEED: 1,             // 開発用の速度倍率（設定画面の実装はステップ5以降）  DEV_TOOLS: true,          // 設定タブに開発用ボタンを表示する（公開時は false）
 
   // ---- セーブ ----
   SAVE_KEY: 'sengoku_incremental_save_v1',
@@ -153,9 +152,47 @@ Game.config = {
     teaBowl: { production: 1.5 },          // 名物の茶器：全生産 ×1.5
     artOfWar: { power: 1.5, retainerSlots: 1 }, // 古の兵法書：戦力 ×1.5、譜代枠 +1
     famedSword: { bossPower: 1.3 },        // 名刀：ボス城での戦力 ×1.3
-    secretBook: { virtue: 1.5 },           // 秘伝の書：得る遺徳 ×1.5（遺徳はステップ4c）
+    secretBook: { virtue: 1.5 },           // 秘伝の書：得る遺徳 ×1.5
     crown: { prestigeMult: 1.5 },          // 天下の宝冠：家格倍率 ×1.5
   },
+
+  // ---- 遺徳（戦の勝利で貯まる。家訓に使う）----
+  // 得る遺徳 = 今の段階の数 × この値（秘伝の書でさらに ×1.5）
+  VIRTUE: {
+    CAPTURE_PER_STAGE: 1,   // 敵城を落とす（旧領回復は除く）
+    DEFENSE_PER_STAGE: 0.5, // 防衛に成功（守備兵で守りきる・街道で迎撃する）
+    BOSS_PER_STAGE: 10,     // ボスを倒す（城を落とした分とは別に加算）
+  },
+
+  // ---- 家訓 ----
+  // 習得コスト = ceil(cost × growth ^ 現在Lv)（遺徳）。max: 最大Lv（null は上限なし）
+  // requires: 前提の家訓（Lv1 以上で解放）。そのほかは1レベルあたりの効果
+  PRECEPTS: {
+    // 内政
+    rakuichi: { cost: 1, growth: 1.6, max: 10, requires: null, gold: 0.5 },          // 金の生産 +50%
+    kenchi: { cost: 3, growth: 3.0, max: 3, requires: 'rakuichi', startFieldByLevel: [20, 50, 100] },
+    fukoku: { cost: 2, growth: 1.25, max: null, requires: null, production: 0.1 },  // 全生産 +10%
+    // 軍事
+    heinou: { cost: 1, growth: 1.6, max: 10, requires: null, troops: 0.5 },         // 兵の生産 +50%
+    teppou: { cost: 3, growth: 1.8, max: 10, requires: 'heinou', power: 0.25 },     // 戦力 +25%
+    joubi: { cost: 3, growth: 2.5, max: 5, requires: 'heinou', startTroops: 1 },    // 一番弱い敵城の守備兵 × Lv
+    // 人材
+    touyou: { cost: 2, growth: 1.8, max: 5, requires: null, rarity: { good: 5, great: 2 } }, // 出現率 +5% / +2%
+    kashindan: { cost: 10, growth: 4.0, max: 3, requires: 'touyou', retainerSlots: 1 },
+    // 家督
+    homare: { cost: 2, growth: 1.7, max: 8, requires: null, prestige: 0.1 },       // 隠居時に得る家格 +10%
+    eisai: { cost: 15, growth: 5.0, max: 2, requires: 'homare', heirCandidates: 1 },
+    // 自動化
+    ando: { cost: 30, growth: 1, max: 1, requires: 'kenchi' },     // 代の開始時に旧領を自動で回復
+    fushin: { cost: 50, growth: 1, max: 1, requires: 'ando' },     // 自動普請
+    // 軍略
+    kaidou: { cost: 2, growth: 1.7, max: 5, requires: null, travel: 0.1 },         // 移動時間 -10%
+    monomi: { cost: 3, growth: 2.0, max: 3, requires: 'kaidou', warning: 5 },      // 侵攻の警告 +5秒
+    geigeki: { cost: 25, growth: 1, max: 1, requires: 'monomi' },  // 自動迎撃
+    saihai: { cost: 5, growth: 2.0, max: 4, requires: 'kaidou', cooldown: 0.15 },  // 采配のクールダウン -15%
+  },
+  AUTO_BUILD_INTERVAL: 1,          // 自動普請：この秒数ごとに1つ建てる
+  AUTO_DEFENSE_POWER_RATIO: 1.5,   // 自動迎撃：守備戦力が侵攻軍の戦力のこの倍率に届く分まで援軍を送る
 
   // ---- 敵の侵攻 ----
   INVASION: {

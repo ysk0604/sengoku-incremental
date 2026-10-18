@@ -238,7 +238,7 @@ window.Game = window.Game || {};
       if (u.state === 'returning') return '帰還中';
       return (u.state === 'sieging' ? '攻城戦中：' : u.state === 'field' ? '野戦中：' : '進軍中：') + sys.node(s, u.to).name;
     }
-    if (s.units.length >= sys.maxUnits(s)) return '出陣待ち（部隊がすべて出ている）';
+    if (sys.unitsInUse(s) >= sys.maxUnits(s)) return '出陣待ち（部隊がすべて出ている）';
     const plan = sys.commanderPlan(s, g);
     if (plan) return '出陣：' + sys.node(s, plan.from).name + ' → ' + sys.node(s, plan.to).name;
     return '勝てそうな城がない（守備戦力の' + cfg.GENERALS.AUTO_MIN_POWER_RATIO + '倍の兵が隣の自領に要る）';
@@ -615,7 +615,7 @@ window.Game = window.Game || {};
   }
 
   function updateUnitList(s) {
-    const key = s.units.map(function (u) { return u.id + ':' + u.state; }).join(',');
+    const key = s.units.map(function (u) { return u.id + ':' + u.state + ':' + u.from; }).join(',');
     if (key !== mapUi.unitListKey) {
       mapUi.unitListKey = key;
       mapUi.unitRowEls = {};
@@ -631,7 +631,9 @@ window.Game = window.Game || {};
         // 帰還中は from/to が入れ替わっているので、表示は「目的地 → 戻り先」の向きのまま見せる
         const route = u.state === 'returning'
           ? nodeName(s, u.from) + ' → ' + nodeName(s, u.to) + '（引き返し）'
-          : nodeName(s, u.from) + ' → ' + nodeName(s, u.to) + (sys.isOwned(s, u.to) ? '（補充）' : '');
+          : u.autoDefense
+            ? nodeName(s, u.from) + ' → ' + nodeName(s, u.path.length ? u.path[u.path.length - 1] : u.to) + '（自動迎撃の援軍）'
+            : nodeName(s, u.from) + ' → ' + nodeName(s, u.to) + (sys.isOwned(s, u.to) ? '（補充）' : '');
         row.appendChild(make('div', 'unit-row-route', route));
         const isCommander = s.generals.some(function (g) { return g.id === u.generalId && g.assignment === 'commander'; });
         row.appendChild(make('div', 'unit-row-leader', '武将：' + generalName(s, u.generalId) + (isCommander ? '（軍団長・自動進軍）' : '')));
@@ -654,7 +656,7 @@ window.Game = window.Game || {};
       setText(e.power, '兵 ' + fmt.num(Math.floor(u.troops)) + '　戦力 ' + fmt.num(sys.unitPower(s, u)));
       setText(e.status, unitStatusText(s, u));
     });
-    setText(els.unitCount, s.units.length + ' / ' + sys.maxUnits(s));
+    setText(els.unitCount, sys.unitsInUse(s) + ' / ' + sys.maxUnits(s));
     setClass(els.unitEmpty, 'hidden', s.units.length > 0);
   }
 
@@ -698,7 +700,7 @@ window.Game = window.Game || {};
     if (mapUi.origin && !sys.isOwned(s, mapUi.origin)) mapUi.origin = null;
 
     let status;
-    if (s.units.length >= sys.maxUnits(s)) {
+    if (sys.unitsInUse(s) >= sys.maxUnits(s)) {
       status = '部隊がすべて出陣中です（同時に ' + sys.maxUnits(s) + ' 部隊まで）';
     } else if (!mapUi.origin) {
       status = '① 出発する自領（朱色の城）をクリック';
@@ -840,6 +842,7 @@ window.Game = window.Game || {};
           ['損害', n(ev.lost) + ' 人'],
           ['城の守備兵', n(ev.survivors) + ' 人（残った兵が守る）'],
           ['功績', '+' + n(ev.merit)],
+          ['遺徳', '+' + n(ev.virtue) + (ev.boss ? '（ボスを倒した分を含む）' : '')],
           ['領地', '米 ' + fmt.rate(ev.income) + '（この代のあいだ）'],
         ];
         if (ev.heirloom) {
@@ -862,6 +865,7 @@ window.Game = window.Game || {};
           ['取り戻した城', ev.names.join('・')],
           ['使った兵', n(ev.cost) + ' 人'],
           ['守備兵', '0 人（補充を送るまで守りは手薄）'],
+          ['功績・遺徳', 'なし（旧領の回復では得られない）'],
         ] };
       case 'unified':
         return { win: true, image: '天下統一', title: '天下統一！', lines: [
@@ -877,6 +881,7 @@ window.Game = window.Game || {};
           ['撃退', '敵兵 ' + n(Math.ceil(ev.defeated)) + ' 人'],
           ['損害', n(ev.lost) + ' 人'],
           ['功績', '+' + n(ev.merit)],
+          ['遺徳', '+' + n(ev.virtue)],
           ['部隊', '目的地へ進軍を続ける'],
         ] };
       case 'fieldLose':
@@ -889,6 +894,7 @@ window.Game = window.Game || {};
           ['撃退', '敵兵 ' + n(Math.ceil(ev.defeated)) + ' 人'],
           ['損害', n(ev.lost) + ' 人'],
           ['功績', '+' + n(ev.merit)],
+          ['遺徳', '+' + n(ev.virtue)],
         ] };
       case 'defenseLose':
         return { win: false, image: '防衛', title: ev.target + (ev.home ? ' が荒らされた…' : ' を奪われた…'), lines: ev.home ? [
@@ -1011,9 +1017,120 @@ window.Game = window.Game || {};
     els.invasionAlert.addEventListener('click', function () { showTab('map'); });
   }
 
+  // ---- 家訓 ----
+  // 系統ごとの列に、前提の家訓の下へ字下げして並べる。カードは一度作り、毎ティックは中身だけ書き換える
+
+  // 系統の中の並び：前提が同じ系統にあればその下（深さ +1）、無ければ列の先頭から
+  function preceptOrder(branchId) {
+    const list = data.PRECEPTS.filter(function (p) { return p.branch === branchId; });
+    const inBranch = function (id) { return list.some(function (p) { return p.id === id; }); };
+    const out = [];
+    function visit(p, depth) {
+      out.push({ def: p, depth: depth });
+      list.forEach(function (c) {
+        if (cfg.PRECEPTS[c.id].requires === p.id) visit(c, depth + 1);
+      });
+    }
+    list.forEach(function (p) {
+      const req = cfg.PRECEPTS[p.id].requires;
+      if (!req || !inBranch(req)) visit(p, 0);
+    });
+    return out;
+  }
+
+  function preceptName(id) {
+    return data.PRECEPTS.find(function (p) { return p.id === id; }).name;
+  }
+
+  function buildPreceptTree(container) {
+    container.textContent = '';
+    const head = make('div', 'precept-head');
+    const virtue = make('span', 'precept-virtue');
+    head.appendChild(virtue);
+    head.appendChild(make('span', 'note',
+      '遺徳は戦の勝利で貯まります（城を落とす・防衛に成功・ボスを倒す）。家訓の効果はずっと続きます。'));
+    container.appendChild(head);
+
+    const grid = make('div', 'precept-grid');
+    const cards = {};
+    data.PRECEPT_BRANCHES.forEach(function (branch) {
+      const col = make('div', 'precept-branch');
+      col.appendChild(make('div', 'precept-branch-name', branch.name));
+      preceptOrder(branch.id).forEach(function (item) {
+        const id = item.def.id;
+        const p = cfg.PRECEPTS[id];
+        const card = make('div', 'precept-card');
+        card.style.marginLeft = (item.depth * 14) + 'px';
+        const top = make('div', 'precept-top');
+        top.appendChild(make('span', 'precept-name', (item.depth ? '└ ' : '') + item.def.name));
+        const level = make('span', 'precept-level');
+        top.appendChild(level);
+        card.appendChild(top);
+        const now = make('div', 'precept-now');
+        card.appendChild(now);
+        const next = make('div', 'precept-next');
+        card.appendChild(next);
+        if (p.requires) card.appendChild(make('div', 'precept-req', '前提：' + preceptName(p.requires) + ' Lv1'));
+        const button = make('button', 'btn btn-small precept-learn');
+        button.addEventListener('click', function () {
+          if (sys.learnPrecept(cur(), id)) update();
+        });
+        card.appendChild(button);
+        col.appendChild(card);
+        cards[id] = { card: card, level: level, now: now, next: next, button: button };
+      });
+      grid.appendChild(col);
+    });
+    container.appendChild(grid);
+    return { virtue: virtue, cards: cards };
+  }
+
+  function updatePreceptTree(s, tree) {
+    setText(tree.virtue, '遺徳の残り ' + fmt.num(s.virtue));
+    Object.keys(tree.cards).forEach(function (id) {
+      const e = tree.cards[id];
+      const p = cfg.PRECEPTS[id];
+      const lv = sys.preceptLevel(s, id);
+      const maxed = sys.preceptMaxed(s, id);
+      const unlocked = sys.preceptUnlocked(s, id);
+      setClass(e.card, 'locked', !unlocked);
+      setClass(e.card, 'learned', lv > 0);
+      setText(e.level, 'Lv ' + lv + (p.max === null ? '' : ' / ' + p.max));
+      setText(e.now, lv > 0 ? '現在：' + sys.preceptEffectText(id, lv) : '未習得');
+      setText(e.next, maxed ? '' : (lv > 0 ? '次：' : '効果：') + sys.preceptEffectText(id, lv + 1));
+      setText(e.button, maxed ? (p.max === 1 ? '習得済み' : '最大Lv') : '習得（遺徳 ' + fmt.num(sys.preceptCost(s, id)) + '）');
+      setDisabled(e.button, !sys.canLearnPrecept(s, id));
+    });
+  }
+
+  // 家系タブから開く家訓画面
+  let preceptModalTree = null;
+  let preceptModalRef = null;
+
+  function updatePreceptModal(s) {
+    const open = !els.preceptModal.classList.contains('hidden');
+    if (!open) return;
+    if (!preceptModalTree || preceptModalRef !== s) {
+      preceptModalTree = buildPreceptTree(els.preceptBody);
+      preceptModalRef = s;
+    }
+    updatePreceptTree(s, preceptModalTree);
+  }
+
+  function bindPrecepts() {
+    $('open-precepts').addEventListener('click', function () {
+      setClass(els.preceptModal, 'hidden', false);
+      update();
+    });
+    $('precept-close').addEventListener('click', function () {
+      setClass(els.preceptModal, 'hidden', true);
+    });
+  }
+
   // ---- 家督継承 ----
 
   let successionKey = null;
+  let successionTree = null; // 継承画面の家訓（その手順のあいだだけ）
 
   function portraitBox(portrait, cls) {
     const p = make('div', 'portrait' + (cls ? ' ' + cls : ''), '肖像');
@@ -1067,7 +1184,7 @@ window.Game = window.Game || {};
     });
   }
 
-  const SUCCESSION_STEPS = ['summary', 'heir', 'retainer', 'ceremony'];
+  const SUCCESSION_STEPS = ['summary', 'precepts', 'heir', 'retainer', 'ceremony'];
 
   function stepLabel(step) {
     const i = SUCCESSION_STEPS.indexOf(step);
@@ -1096,7 +1213,9 @@ window.Game = window.Game || {};
     const sc = s.succession;
     const body = els.successionBody;
     body.textContent = '';
-    const gained = sys.prestigeGain(s);
+    successionTree = null;
+    setClass(els.successionModal.querySelector('.modal-box'), 'wide', sc.step === 'precepts');
+    const gained = sys.successionGain(s);
     const multNow = sys.prestigeMultiplier(s);
     const multNext = sys.prestigeMultiplierFor(s, s.prestige + gained);
     body.appendChild(make('div', 'succession-step', stepLabel(sc.step)));
@@ -1116,6 +1235,8 @@ window.Game = window.Game || {};
         ['得る家格', '+' + fmt.num(gained)],
         ['累計家格', fmt.num(s.prestige) + ' → ' + fmt.num(s.prestige + gained)],
         ['家格倍率', fmt.mult(multNow) + ' → ' + fmt.mult(multNext) + '（全生産にかかる）'],
+        ['この代の遺徳', '+' + fmt.num(s.generationVirtue) + '（戦の勝利で得た分）'],
+        ['遺徳の残り', fmt.num(s.virtue) + '（次の画面の家訓に使える）'],
         ['旧領', s.map.won.length
           ? 'この代で落とした ' + s.map.won.length + '城が旧領になる（次の代は守備兵 1/10）'
           : 'この代で新たに落とした城はない'],
@@ -1123,13 +1244,22 @@ window.Game = window.Game || {};
       body.appendChild(rows);
       body.appendChild(make('div', 'note succession-note',
         '米・金・兵・功績・施設・武将（譜代を除く）・この段階の領地は失われます。' +
-        '家格・家宝・譜代家臣・平定済みの段階・旧領の記録は引き継がれます。'));
-      const next = make('button', 'btn succession-next', '跡継ぎを選ぶ');
+        '家格・遺徳・家訓・家宝・譜代家臣・平定済みの段階・旧領の記録は引き継がれます。'));
+      const next = make('button', 'btn succession-next', '家訓を定める');
       next.addEventListener('click', function () {
-        sys.successionStep(cur(), 'heir');
+        sys.successionStep(cur(), 'precepts');
         update();
       });
       body.appendChild(next);
+    } else if (sc.step === 'precepts') {
+      body.appendChild(make('h2', 'succession-title', '家訓を定める'));
+      body.appendChild(make('div', 'note',
+        '習得した家訓は次の代から効きます（使わずに残した遺徳も引き継がれます）。'));
+      const box = make('div', 'succession-precepts');
+      body.appendChild(box);
+      successionTree = buildPreceptTree(box);
+      updatePreceptTree(s, successionTree);
+      navButtons(body, 'summary', '跡継ぎを選ぶ', 'heir', false);
     } else if (sc.step === 'heir') {
       body.appendChild(make('h2', 'succession-title', '跡継ぎを選ぶ'));
       body.appendChild(make('div', 'note', '格が上がる確率 ' +
@@ -1150,7 +1280,7 @@ window.Game = window.Game || {};
         list.appendChild(card);
       });
       body.appendChild(list);
-      navButtons(body, 'summary', '譜代家臣を選ぶ', 'retainer', sc.chosen === null);
+      navButtons(body, 'precepts', '譜代家臣を選ぶ', 'retainer', sc.chosen === null);
     } else if (sc.step === 'retainer') {
       const slots = sys.retainerSlots(s);
       body.appendChild(make('h2', 'succession-title', '譜代家臣を選ぶ'));
@@ -1211,10 +1341,12 @@ window.Game = window.Game || {};
   function updateSuccession(s) {
     const sc = s.succession;
     setClass(els.successionModal, 'hidden', !sc);
-    const key = sc ? s.generation + ':' + sc.step + ':' + sc.chosen + ':' + sc.retainers.join(',') : null;
-    if (key === successionKey) return;
-    successionKey = key;
-    if (sc) buildSuccession(s);
+    const key = sc ? s.generation + ':' + sc.step + ':' + sc.chosen + ':' + sc.retainers.join(',') + ':' + sc.candidates.length : null;
+    if (key !== successionKey) {
+      successionKey = key;
+      if (sc) buildSuccession(s);
+    }
+    if (sc && successionTree) updatePreceptTree(s, successionTree);
   }
 
   function updateLordHeader(s) {
@@ -1268,7 +1400,8 @@ window.Game = window.Game || {};
   function updateLineage(s) {
     setText(els.lineagePrestige, fmt.num(s.prestige));
     setText(els.lineageMult, fmt.mult(sys.prestigeMultiplier(s)));
-    setText(els.lineageGain, '家格 +' + fmt.num(sys.prestigeGain(s)));
+    setText(els.lineageGain, '家格 +' + fmt.num(sys.successionGain(s)));
+    setText(els.lineageVirtue, fmt.num(s.virtue));
 
     const key = s.generation + ':' + s.lineage.length + ':' + s.heirlooms.join(',') + ':' + s.houseName;
     if (key !== lineageKey) {
@@ -1283,6 +1416,7 @@ window.Game = window.Game || {};
           traitsLabel(r.traits),
           fmt.num(r.kokudaka),
           '+' + fmt.num(r.prestige),
+          '+' + fmt.num(r.virtue),
           formatSeconds(r.seconds),
         ].forEach(function (v) { tr.appendChild(make('td', '', v)); });
         tbody.appendChild(tr);
@@ -1295,9 +1429,11 @@ window.Game = window.Game || {};
       });
       els.lineageCurrent.kokudaka = make('td');
       els.lineageCurrent.gain = make('td');
+      els.lineageCurrent.virtue = make('td');
       els.lineageCurrent.time = make('td');
       tr.appendChild(els.lineageCurrent.kokudaka);
       tr.appendChild(els.lineageCurrent.gain);
+      tr.appendChild(els.lineageCurrent.virtue);
       tr.appendChild(els.lineageCurrent.time);
       tbody.appendChild(tr);
 
@@ -1312,7 +1448,8 @@ window.Game = window.Game || {};
       });
     }
     setText(els.lineageCurrent.kokudaka, fmt.num(s.kokudaka));
-    setText(els.lineageCurrent.gain, '(+' + fmt.num(sys.prestigeGain(s)) + ')');
+    setText(els.lineageCurrent.gain, '(+' + fmt.num(sys.successionGain(s)) + ')');
+    setText(els.lineageCurrent.virtue, '+' + fmt.num(s.generationVirtue));
     setText(els.lineageCurrent.time, formatSeconds(s.lord.age));
   }
 
@@ -1367,10 +1504,63 @@ window.Game = window.Game || {};
         : '侵攻できません（侵攻中・攻めてくる敵城がない・自軍の兵が0 のどれか）';
       update();
     });
+    $('dev-add-virtue').addEventListener('click', function () {
+      sys.devAddVirtue(cur(), 100);
+      update();
+    });
     $('reset-button').addEventListener('click', function () {
       if (!confirm('セーブデータを削除して最初からやり直しますか？')) return;
       Game.state.reset();
       update();
+    });
+    els.autoBuildCheck.addEventListener('change', function () {
+      cur().settings.autoBuild = els.autoBuildCheck.checked;
+      update();
+    });
+    bindTransfer();
+  }
+
+  // セーブの書き出し・読み込み（別のPCへ移す）
+  function bindTransfer() {
+    const exportText = $('export-text');
+    const exportCopy = $('export-copy');
+    const exportStatus = $('export-status');
+    const importText = $('import-text');
+    const importStatus = $('import-status');
+
+    $('export-button').addEventListener('click', function () {
+      exportText.value = Game.state.exportString();
+      exportCopy.disabled = false;
+      exportStatus.textContent = new Date().toLocaleTimeString('ja-JP') + ' の状態を書き出しました（' +
+        exportText.value.length + '文字）';
+    });
+    exportCopy.addEventListener('click', function () {
+      exportText.select();
+      const done = function () { exportStatus.textContent = 'コピーしました'; };
+      // file:// ではクリップボードAPIが使えないことがあるので、古い方法も試す
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(exportText.value).then(done, function () {
+          exportStatus.textContent = document.execCommand('copy') ? 'コピーしました' : '選択した文字列を Ctrl+C でコピーしてください';
+        });
+      } else {
+        exportStatus.textContent = document.execCommand('copy') ? 'コピーしました' : '選択した文字列を Ctrl+C でコピーしてください';
+      }
+    });
+    $('import-button').addEventListener('click', function () {
+      const text = importText.value.trim();
+      if (!text) {
+        importStatus.textContent = '貼り付けた文字列がありません';
+        return;
+      }
+      if (!confirm('貼り付けたセーブを読み込みますか？（今の進行は上書きされます）')) return;
+      if (Game.state.importString(text)) {
+        importText.value = '';
+        importStatus.textContent = '読み込みました（' + Game.state.current.houseName + ' 第' +
+          fmt.kanji(Game.state.current.generation) + '代）';
+        update();
+      } else {
+        importStatus.textContent = '読み込めませんでした。文字列が途中で切れていないか確かめてください';
+      }
     });
   }
 
@@ -1387,6 +1577,7 @@ window.Game = window.Game || {};
     });
     setText(els.power, fmt.num(sys.power(s)));
     setText(els.merit, fmt.num(s.resources.merit));
+    setText(els.virtue, fmt.num(s.virtue));
 
     const t = Game.state.lastSavedAt;
     setText(els.saveStatus, t ? '自動保存 ' + new Date(t).toLocaleTimeString('ja-JP') : '');
@@ -1433,9 +1624,20 @@ window.Game = window.Game || {};
     });
   }
 
+  let stateRef = null;
+
   function update() {
     const s = cur();
+    if (s !== stateRef) {
+      // データ削除・読み込みで状態が入れ替わった：作り直しの目印を消す
+      stateRef = s;
+      lineageKey = null;
+      successionKey = null;
+    }
     updateHeader(s);
+    const fushin = sys.preceptLevel(s, 'fushin') > 0;
+    setClass(els.autoBuild, 'hidden', !fushin);
+    if (fushin && els.autoBuildCheck.checked !== s.settings.autoBuild) els.autoBuildCheck.checked = s.settings.autoBuild;
     setText(els.clickAmount, '+' + fmt.num(sys.clickAmount(s)) + ' 石');
     const look = sys.castleLook(s);
     setText(els.castleLook, data.CASTLE_LOOKS[look]);
@@ -1448,6 +1650,7 @@ window.Game = window.Game || {};
     updateGenerals(s);
     updateMap(s);
     updateLineage(s);
+    updatePreceptModal(s);
     updateSuccession(s);
   }
 
@@ -1512,6 +1715,12 @@ window.Game = window.Game || {};
     els.lineageGain = $('lineage-gain');
     els.lineageRows = $('lineage-rows');
     els.heirloomList = $('heirloom-list');
+    els.virtue = $('virtue-value');
+    els.lineageVirtue = $('lineage-virtue');
+    els.preceptModal = $('precept-modal');
+    els.preceptBody = $('precept-body');
+    els.autoBuild = $('auto-build');
+    els.autoBuildCheck = $('auto-build-check');
 
     buildFacilities();
     buildBulkButtons();
@@ -1520,6 +1729,7 @@ window.Game = window.Game || {};
     bindMap();
     bindTabs();
     bindSettings();
+    bindPrecepts();
     update();
   }
 

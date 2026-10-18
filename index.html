@@ -54,6 +54,10 @@
         <span class="res-name">功績</span>
         <span class="res-value" id="merit-value">0</span>
       </div>
+      <div class="res" data-res="virtue" title="戦の勝利で貯まる。家系タブの家訓に使う">
+        <span class="res-name">遺徳</span>
+        <span class="res-value" id="virtue-value">0</span>
+      </div>
       <div class="res" data-res="prestige">
         <span class="res-name">家格倍率</span>
         <span class="res-value" id="prestige-value">×1</span>
@@ -89,6 +93,9 @@
           <div class="bulk-area">
             <span class="bulk-label">一括建設</span>
             <div id="bulk-buttons" class="bulk-buttons"></div>
+            <label id="auto-build" class="auto-build hidden">
+              <input type="checkbox" id="auto-build-check"> 自動普請
+            </label>
           </div>
           <!-- 城の画像（ステップ6で画像に差し替え。今はダミー） -->
           <div id="castle-image" class="castle-image" data-look="0">
@@ -180,12 +187,17 @@
             <span class="label">今継承すると</span>
             <span id="lineage-gain" class="lineage-big">家格 +0</span>
           </div>
+          <div class="lineage-stat">
+            <span class="label">遺徳の残り</span>
+            <span id="lineage-virtue" class="lineage-big">0</span>
+            <button id="open-precepts" class="btn precept-open">家訓を開く</button>
+          </div>
         </div>
 
         <h3>歴代当主</h3>
         <table class="lineage-table">
           <thead>
-            <tr><th>代</th><th>当主</th><th>特性</th><th>その代の石高</th><th>得た家格</th><th>治世</th></tr>
+            <tr><th>代</th><th>当主</th><th>特性</th><th>その代の石高</th><th>得た家格</th><th>得た遺徳</th><th>治世</th></tr>
           </thead>
           <tbody id="lineage-rows"></tbody>
         </table>
@@ -204,6 +216,26 @@
           <button id="reset-button" class="btn btn-danger">データ削除</button>
           <span class="note">セーブデータを消して最初からやり直します。</span>
         </div>
+
+        <h3 class="settings-heading">セーブの書き出し・読み込み</h3>
+        <div class="note">別のPCへ移すときは、ここで書き出した文字列を、移した先の「読み込み」に貼り付けてください。</div>
+        <div class="transfer">
+          <div class="transfer-col">
+            <div class="settings-row">
+              <button id="export-button" class="btn">書き出す</button>
+              <button id="export-copy" class="btn" disabled>コピー</button>
+              <span id="export-status" class="note"></span>
+            </div>
+            <textarea id="export-text" class="save-text" readonly placeholder="「書き出す」を押すと、ここにセーブの文字列が出ます"></textarea>
+          </div>
+          <div class="transfer-col">
+            <div class="settings-row">
+              <button id="import-button" class="btn">読み込む</button>
+              <span id="import-status" class="note"></span>
+            </div>
+            <textarea id="import-text" class="save-text" placeholder="書き出した文字列をここに貼り付けて「読み込む」を押してください（今の進行は上書きされます）"></textarea>
+          </div>
+        </div>
         <div id="dev-tools" class="dev-tools hidden">
           <h3>開発用</h3>
           <div class="settings-row">
@@ -217,6 +249,10 @@
           <div class="settings-row">
             <button id="dev-clear-stage" class="btn">次の段階へ</button>
             <span class="note">今の段階のボスを倒したことにします（家宝も手に入ります）。</span>
+          </div>
+          <div class="settings-row">
+            <button id="dev-add-virtue" class="btn">遺徳 +100</button>
+            <span class="note">家訓をすぐ試すためのボタンです。</span>
           </div>
           <div class="settings-row">
             <button id="dev-invade" class="btn">今すぐ侵攻させる</button>
@@ -234,6 +270,15 @@
       <h2 id="result-title" class="result-title"></h2>
       <div id="result-body" class="result-body"></div>
       <button id="result-close" class="btn result-close">閉じる</button>
+    </div>
+  </div>
+
+  <!-- 家訓（家系タブから開く。継承画面では継承の中に同じものを出す） -->
+  <div id="precept-modal" class="modal hidden">
+    <div class="modal-box precept-box">
+      <h2 class="succession-title">家訓</h2>
+      <div id="precept-body"></div>
+      <div class="precept-foot"><button id="precept-close" class="btn">閉じる</button></div>
     </div>
   </div>
 

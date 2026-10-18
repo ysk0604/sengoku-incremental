@@ -27,6 +27,9 @@ window.Game = window.Game || {};
       generation: 1,
       lord: firstLord(),
       prestige: 0,       // 累計家格（継承で引き継ぐ）
+      virtue: 0,         // 遺徳の残り（戦の勝利で貯まり、家訓に使う。継承で引き継ぐ）
+      generationVirtue: 0, // この代で得た遺徳（継承画面・家系の表示用）
+      precepts: {},      // 習得済みの家訓 { 家訓ID: Lv }（継承で引き継ぐ）
       formerLands: [],   // 旧領：前の代までに落とした敵城のID（守備兵が 1/10 になる）
       lineage: [],       // 歴代当主の記録
       succession: null,  // 継承の手続き中（null でなければ時間を止めて継承画面を出す）
@@ -52,7 +55,7 @@ window.Game = window.Game || {};
       nextInvasionId: 1,
       battles: [],       // 進行中の合戦（攻城戦・防衛戦・野戦。采配の効果時間・クールダウン）
       flags: { firstVictory: false, unified: false },
-      settings: { bulk: cfg.DEFAULT_BULK },
+      settings: { bulk: cfg.DEFAULT_BULK, autoBuild: true }, // autoBuild：自動普請のON/OFF
       stats: { playTime: 0, battlesWon: 0 },
     };
   }
@@ -185,6 +188,7 @@ window.Game = window.Game || {};
       return {
         id: v.id, from: v.from, to: v.to, troops: v.troops, startTroops: v.startTroops,
         state: v.state, elapsed: v.elapsed, duration: v.duration,
+        autoSent: v.autoSent === true, // 自動迎撃の援軍を送ったか
       };
     });
     const invIds = s.invasions.map(function (v) { return v.id; });
@@ -217,6 +221,8 @@ window.Game = window.Game || {};
         pursuit: isNum(u.pursuit) ? u.pursuit : 0,
         pursuitFrom: isValid(u.pursuitFrom) ? u.pursuitFrom : null,
         pursuitInvasion: invIds.indexOf(u.pursuitInvasion) >= 0 ? u.pursuitInvasion : null,
+        path: Array.isArray(u.path) ? u.path.filter(isValid) : [], // 続けて向かう拠点（自動迎撃の援軍）
+        autoDefense: u.autoDefense === true,
       };
     });
     const maxId = s.units.reduce(function (m, u) { return Math.max(m, u.id); }, 0);
@@ -295,6 +301,7 @@ window.Game = window.Game || {};
         kokudaka: isNum(r.kokudaka) ? r.kokudaka : 0,
         prestige: isNum(r.prestige) ? r.prestige : 0,
         seconds: isNum(r.seconds) ? r.seconds : 0,
+        virtue: isNum(r.virtue) ? r.virtue : 0,
       };
     });
     const sc = raw.succession;
@@ -302,16 +309,60 @@ window.Game = window.Game || {};
       const candidates = sc.candidates.map(sanitizeLord).filter(function (c) { return c; });
       const generalIds = s.generals.map(function (g) { return g.id; });
       s.succession = candidates.length ? {
-        step: ['summary', 'heir', 'retainer', 'ceremony'].indexOf(sc.step) >= 0 ? sc.step : 'summary',
+        step: ['summary', 'precepts', 'heir', 'retainer', 'ceremony'].indexOf(sc.step) >= 0 ? sc.step : 'summary',
         candidates: candidates,
         chosen: Number.isInteger(sc.chosen) && sc.chosen >= 0 && sc.chosen < candidates.length ? sc.chosen : null,
         retainers: (Array.isArray(sc.retainers) ? sc.retainers : []).filter(function (id, i, arr) {
           return generalIds.indexOf(id) >= 0 && arr.indexOf(id) === i;
         }),
+        gain: isNum(sc.gain) ? sc.gain : null, // 隠居した時点の得る家格（古いセーブは null → その場で計算）
       } : null;
     } else {
       s.succession = null;
     }
+  }
+
+  // 家訓：知っている家訓だけ、1〜最大Lv の整数で残す（merge は既定に無いキーを落とすので raw から読む）
+  function sanitizePrecepts(s, raw) {
+    const src = raw && raw.precepts && typeof raw.precepts === 'object' ? raw.precepts : {};
+    s.precepts = {};
+    Object.keys(cfg.PRECEPTS).forEach(function (id) {
+      const v = src[id];
+      if (!Number.isInteger(v) || v <= 0) return;
+      const max = cfg.PRECEPTS[id].max;
+      s.precepts[id] = max === null ? v : Math.min(max, v);
+    });
+    s.virtue = Math.max(0, s.virtue);
+    s.generationVirtue = Math.max(0, s.generationVirtue);
+  }
+
+  // 読み込んだ JSON をゲーム状態にする（古い形式・壊れた値はここで直す）
+  function fromParsed(parsed) {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('セーブデータの形が違います');
+    parsed = migrate(parsed);
+    const loaded = merge(create(), parsed);
+    sanitizeGenerals(loaded);
+    sanitizeMap(loaded, parsed);
+    sanitizeLineage(loaded, parsed);
+    sanitizePrecepts(loaded, parsed);
+    return loaded;
+  }
+
+  // 書き出し用の文字列：UTF-8 の JSON を Base64 にする（家名などの日本語も通る）
+  function encode(obj) {
+    const bytes = new TextEncoder().encode(JSON.stringify(obj));
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(bin);
+  }
+
+  function decode(text) {
+    const bin = atob(text.replace(/\s+/g, '')); // 貼り付けで混ざった改行・空白は無視
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return JSON.parse(new TextDecoder().decode(bytes));
   }
 
   const state = {
@@ -336,18 +387,33 @@ window.Game = window.Game || {};
       try {
         const raw = localStorage.getItem(cfg.SAVE_KEY);
         if (!raw) return false;
-        const parsed = migrate(JSON.parse(raw));
-        const loaded = merge(create(), parsed);
-        sanitizeGenerals(loaded);
-        sanitizeMap(loaded, parsed);
-        sanitizeLineage(loaded, parsed);
-        state.current = loaded;
+        state.current = fromParsed(JSON.parse(raw));
         return true;
       } catch (e) {
         console.error('ロードに失敗しました', e);
         state.current = create();
         return false;
       }
+    },
+
+    // セーブの書き出し（Base64 の文字列。別のPCへ移すときに使う）
+    exportString: function () {
+      state.current.version = cfg.SAVE_VERSION;
+      return encode(state.current);
+    },
+
+    // 書き出した文字列を読み込んでセーブする。読めなければ false（今の状態はそのまま）
+    importString: function (text) {
+      let loaded;
+      try {
+        loaded = fromParsed(decode(String(text).trim()));
+      } catch (e) {
+        console.error('読み込みに失敗しました', e);
+        return false;
+      }
+      state.current = loaded;
+      state.save();
+      return true;
     },
 
     reset: function () {
