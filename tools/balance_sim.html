@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>バランス確認シミュレーション</title>
+  <style>
+    body { font-family: "Yu Mincho", serif; margin: 16px; background: #f3ecdc; color: #2a2622; }
+    h2 { font-size: 16px; margin: 20px 0 6px; }
+    table { border-collapse: collapse; font-size: 13px; background: #faf6ec; }
+    th, td { border: 1px solid #cbbb9c; padding: 3px 8px; white-space: nowrap; }
+    th { background: #e7dcc4; font-weight: normal; }
+    pre#json { display: none; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size: 20px;">バランス確認シミュレーション</h1>
+  <p>ゲーム本体のコードをそのまま動かし、上手なプレイを自動で真似ます（数値は js/config.js のまま）。
+    条件は URL の ? で変えられます（例：<code>balance_sim.html?seed=2&amp;clicks=0&amp;hours=6</code>）。</p>
+  <script src="../js/config.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/format.js"></script>
+  <script src="../js/state.js"></script>
+  <script src="../js/systems.js"></script>
+  <script src="balance_sim.js"></script>
+</body>
+</html>
