@@ -10,7 +10,8 @@
 //   gens=60      この代まで
 //   maxReign=900 隠居の好機が来なくても、治世がこの秒数になったら隠居する
 //   preset=A     試した数値の組み合わせ（A / A2 / B。下の PRESETS）
-//   mod=...      仕組みを試しに変える（noSqrtPower / logPrestige。下の MODS）
+//   mod=...      仕組みを試しに変える（noSqrtPower / logPrestige / flatTerritory。下の MODS）
+//                flatTerritory は terrBase=1・terrGrowth=10 で量を変えられる
 //   set=...      数値を試しに変える（config.js は書き換えない。このページの中だけ）
 //                「パス=値」をカンマで区切る。data. で始めると data.js の値
 //                例：set=BATTLE.TERRITORY_RICE_RATE=0.002,FACILITIES.castle.effect=1.1,data.STAGES.0.castles.0.troops=30
@@ -99,6 +100,23 @@
     logPrestige: function () {
       sys.prestigeMultiplierFor = function (s, prestige) {
         return (1 + Math.log2(1 + prestige)) * sys.heirloomEffect(s, 'prestigeMult');
+      };
+    },
+    // 領地の米を、敵の兵の数ではなく段階ごとの決まった量にする
+    //   1つの城あたり 米 +terrBase × terrGrowth^(段階-1) /秒（全体倍率がかかる）
+    flatTerritory: function () {
+      const base = param('terrBase', 1);
+      const growth = param('terrGrowth', 10);
+      const perCastle = function (stage) { return base * Math.pow(growth, stage - 1); };
+      overrides.push('領地の米：1城あたり ' + base + ' × ' + growth + '^(段階-1) /秒');
+      sys.territoryRice = function (s) {
+        let r = 0;
+        s.map.owned.forEach(function (id) { if (id !== 'home') r += perCastle(s.map.stage); });
+        s.map.cleared.forEach(function (n) {
+          if (n === s.map.stage) return;
+          r += data.STAGES[n - 1].castles.length * perCastle(n);
+        });
+        return r * sys.resourceMultiplier(s, 'rice');
       };
     },
   };

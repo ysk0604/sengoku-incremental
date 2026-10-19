@@ -87,10 +87,10 @@ Game.data = {
     {
       stage: 2, name: '一国統一期', region: '尾張',
       castles: [
-        { id: 's2_inuyama', name: '犬山の城主', troops: 1000 },
-        { id: 's2_iwakura', name: '岩倉の城主', troops: 3000 },
-        { id: 's2_narumi', name: '鳴海の城主', troops: 8000 },
-        { id: 's2_kiyosu', name: '清洲の守護代', troops: 30000, boss: true, heirloom: 'artOfWar' },
+        { id: 's2_inuyama', name: '犬山の城主', troops: 3000 },
+        { id: 's2_iwakura', name: '岩倉の城主', troops: 9000 },
+        { id: 's2_narumi', name: '鳴海の城主', troops: 24000 },
+        { id: 's2_kiyosu', name: '清洲の守護代', troops: 90000, boss: true, heirloom: 'artOfWar' },
       ],
       map: {
         positions: {
@@ -114,10 +114,10 @@ Game.data = {
     {
       stage: 3, name: '地方統一期', region: '東海・近畿',
       castles: [
-        { id: 's3_mikawa', name: '三河の国衆', troops: 1e5 },
-        { id: 's3_kitabatake', name: '伊勢の北畠家', troops: 4e5 },
-        { id: 's3_azai', name: '近江の浅井家', troops: 1.5e6 },
-        { id: 's3_saito', name: '美濃の斎藤家', troops: 1e7, boss: true, heirloom: 'famedSword' },
+        { id: 's3_mikawa', name: '三河の国衆', troops: 3e5 },
+        { id: 's3_kitabatake', name: '伊勢の北畠家', troops: 1.2e6 },
+        { id: 's3_azai', name: '近江の浅井家', troops: 4.5e6 },
+        { id: 's3_saito', name: '美濃の斎藤家', troops: 3e7, boss: true, heirloom: 'famedSword' },
       ],
       map: {
         positions: {

@@ -20,7 +20,7 @@ Game.config = {
   CLICK: {
     BASE_RICE: 1,           // 1クリックの基本量
     FIELD_LEVEL_STEP: 10,   // 田畑レベルこの数ごとに…
-    RATE_SHARE_PER_STEP: 0.05, // …米の毎秒生産量のこの割合をクリック量に加算
+    RATE_SHARE_PER_STEP: 0.01, // …米の毎秒生産量のこの割合をクリック量に加算
   },
 
   // ---- 節目ボーナス（田畑・市場・兵舎） ----
@@ -32,15 +32,15 @@ Game.config = {
   // produces: 生産する資源（null は生産しない） / unlock: 解放条件（null は最初から）
   FACILITIES: {
     field: {
-      costBase: { rice: 10 }, growth: 1.2, effect: 1,
+      costBase: { rice: 10 }, growth: 1.3, effect: 1,
       produces: 'rice', milestone: true, unlock: null,
     },
     market: {
-      costBase: { rice: 30 }, growth: 1.2, effect: 0.5,
+      costBase: { rice: 30 }, growth: 1.3, effect: 0.5,
       produces: 'gold', milestone: true, unlock: { facility: 'field', level: 5 },
     },
     barracks: {
-      costBase: { gold: 20 }, growth: 1.22, effect: 0.1,
+      costBase: { gold: 20 }, growth: 1.3, effect: 0.1,
       produces: 'troops', milestone: true, unlock: { facility: 'market', level: 3 },
     },
     smithy: {
@@ -102,7 +102,7 @@ Game.config = {
     RETREAT_TAKEN: 0.5,       // 退却中に受ける損害の倍率
     RETREAT_PURSUIT_SECONDS: 3, // 退却を始めてから追撃を受ける秒数
     // 勝利報酬
-    TERRITORY_RICE_RATE: 0.002, // 領地：米 +敵兵力 × この値 /秒（全体倍率がかかる）
+    TERRITORY_RICE_RATE: 0.0002, // 領地：米 +敵兵力 × この値 /秒（全体倍率がかかる）
     MERIT_RATE: 0.1,           // 功績 +敵兵力 × この値
   },
 
@@ -121,7 +121,7 @@ Game.config = {
   PRESTIGE: {
     // 継承で得る家格 = floor((その代の石高 ÷ DIVISOR) ^ EXPONENT)
     DIVISOR: 1000,
-    EXPONENT: 0.3,
+    EXPONENT: 0.2,
     MULT_PER_POINT: 0.1,    // 家格倍率 = 1 + 累計家格 × この値
   },
   // 跡継ぎの特性（★1のときの効果）。weight は出やすさ
