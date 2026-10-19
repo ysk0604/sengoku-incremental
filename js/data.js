@@ -191,6 +191,10 @@ Game.data = {
     },
   ],
 
+  // ---- 稲刈りと金山の道具（数値は config.js の WORK.SICKLES / PICKAXES）----
+  SICKLE_NAMES: ['錆びた鎌', '鉄の鎌', '鋼の鎌', '名工の鎌', '天下の大鎌'],
+  PICKAXE_NAMES: ['鉄のツルハシ', '鋼のツルハシ', '名工のツルハシ', '天下のツルハシ'],
+
   // ---- 家宝（効果の数値は config.js の HEIRLOOMS）----
   HEIRLOOMS: [
     { id: 'teaBowl', name: '名物の茶器', desc: '全生産 ×1.5' },
@@ -215,6 +219,10 @@ Game.data = {
     { id: 'rakuichi', branch: 'domestic', name: '楽市楽座' },
     { id: 'kenchi', branch: 'domestic', name: '検地' },
     { id: 'fukoku', branch: 'domestic', name: '富国' },
+    { id: 'hosaku', branch: 'domestic', name: '豊作' },
+    { id: 'kinzan', branch: 'domestic', name: '金山開発' },
+    { id: 'koudou', branch: 'domestic', name: '坑道の記録' },
+    { id: 'koumyaku', branch: 'domestic', name: '鉱脈探し' },
     { id: 'heinou', branch: 'military', name: '兵農分離' },
     { id: 'teppou', branch: 'military', name: '鉄砲隊' },
     { id: 'joubi', branch: 'military', name: '常備兵' },
@@ -224,6 +232,8 @@ Game.data = {
     { id: 'eisai', branch: 'house', name: '英才教育' },
     { id: 'ando', branch: 'automation', name: '旧領安堵' },
     { id: 'fushin', branch: 'automation', name: '自動普請' },
+    { id: 'ninsoku', branch: 'automation', name: '人足' },
+    { id: 'meikou', branch: 'automation', name: '名工の伝手' },
     { id: 'kaidou', branch: 'strategy', name: '街道整備' },
     { id: 'monomi', branch: 'strategy', name: '物見櫓' },
     { id: 'geigeki', branch: 'strategy', name: '自動迎撃' },

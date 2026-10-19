@@ -16,11 +16,63 @@ Game.config = {
   // ---- 家 ----
   DEFAULT_HOUSE_NAME: '天野家',
 
-  // ---- 開墾クリック ----
-  CLICK: {
-    BASE_RICE: 1,           // 1クリックの基本量
-    FIELD_LEVEL_STEP: 10,   // 田畑レベルこの数ごとに…
-    RATE_SHARE_PER_STEP: 0.01, // …米の毎秒生産量のこの割合をクリック量に加算
+  // ---- 稲刈りと金山（4.10。カーソルの周りの円の中を、道具が一定間隔で自動で打つ）----
+  WORK: {
+    WIDTH: 760, HEIGHT: 260,  // 作業画面の大きさ（Canvas の座標）
+    MAX_ITEMS: 60,            // 画面に出せる稲穂・岩の数の上限（低スペック対策）
+    MAX_DROPS: 60,            // 跳ねている資源の上限（超えたらすぐ加える）
+    MAX_POPS: 24,             // 数字のポップアップの上限
+    DROP_SECONDS: 0.4,        // 資源が跳ねてから加算されるまで
+    POP_SECONDS: 0.8,         // 数字のポップアップが消えるまで
+    RATE_SMOOTHING: 0.2,      // 手作業の稼ぎ（1秒ごとに測る）をならす割合。自動の稼ぎはこれを元にする
+    UNSEEN_RATIO: 0.3,        // 金山の解放後、選んでいない方は手作業の稼ぎのこの割合で自動で進む
+    RICE: {
+      BASE: 1,                // 稲穂1つ（黄色い穂）の基本の米。全体倍率がかかる
+      RATE_SHARE: 0.05,       // …に、米の毎秒生産量のこの割合を足す
+      SPAWN_PER_SECOND: 1.2,  // 稲穂の生える速さ（1秒あたり）
+      SPAWN_PER_FIELD_LEVEL: 0.02, // 田畑Lvごとに生える速さ +2%
+      HP: 2,                  // 稲穂の耐久値
+      GREEN_SECONDS: 3,       // 青い穂 → 黄色い穂 までの秒数
+      YELLOW_SECONDS: 3,      // 黄色い穂 → 黄金の穂
+      GOLDEN_SECONDS: 4,      // 黄金の穂が枯れて消えるまで
+      STAGE_MULTS: [0.3, 1, 3], // 青い穂・黄色い穂・黄金の穂の量
+      BUMPER_CHANCE: 0.02,    // 豊作の穂（光る）の出やすさ
+      BUMPER_HP: 30,
+      BUMPER_MULT: 20,
+      BUMPER_SECONDS: 10,     // 豊作の穂が消えるまで
+      HIT_PAD: 8,             // 当たり判定を円の半径よりこれだけ広くする（穂の大きさの分）
+      MARGIN_X: 20, MARGIN_TOP: 34, MARGIN_BOTTOM: 14, // 稲穂が生える範囲の余白
+    },
+    MINE: {
+      BASE: 2,                // 岩1つ（深さ0）の基本の金。全体倍率がかかる
+      RATE_SHARE: 0.02,       // …に、金の毎秒生産量のこの割合を足す
+      COLS: 12, ROWS: 4,      // 岩のます目
+      HP: 5,                  // 深さ0の岩の耐久値
+      DEPTH_STEP: 10,         // 深さこの数ごとに…
+      HARD_GROWTH: 2,         // …硬さ ×2
+      GOLD_GROWTH: 1.3,       // …金 ×1.3（硬さより伸びが小さいので、深く掘るには良いツルハシが要る）
+      VEIN_CHANCE: 0.03,      // 金の鉱脈（光る岩）の出やすさ
+      VEIN_MULT: 20,
+    },
+    BLAST: {
+      COOLDOWN: 30,
+      ROWS: 2,                // 上から何段をまとめて砕くか
+      COST_ROCKS: 8,          // 費用 = 今の深さの岩この数ぶんの金
+    },
+    // 道具（名前は data.js）。power 威力 / radius 範囲の半径 / speed 1秒に打つ回数 / price 金
+    SICKLES: [
+      { power: 1, radius: 30, speed: 2, price: 0 },
+      { power: 3, radius: 40, speed: 3, price: 50 },
+      { power: 10, radius: 55, speed: 4, price: 2000 },
+      { power: 40, radius: 75, speed: 5, price: 1e5 },
+      { power: 200, radius: 100, speed: 6, price: 1e7 },
+    ],
+    PICKAXES: [
+      { power: 5, radius: 35, speed: 2, price: 0 },
+      { power: 25, radius: 45, speed: 3, price: 5000 },
+      { power: 150, radius: 60, speed: 4, price: 5e5 },
+      { power: 1000, radius: 80, speed: 5, price: 1e8 },
+    ],
   },
 
   // ---- 節目ボーナス（田畑・市場・兵舎） ----
@@ -174,6 +226,10 @@ Game.config = {
     rakuichi: { cost: 1, growth: 1.6, max: 10, requires: null, gold: 0.5 },          // 金の生産 +50%
     kenchi: { cost: 3, growth: 3.0, max: 3, requires: 'rakuichi', startFieldByLevel: [20, 50, 100] },
     fukoku: { cost: 2, growth: 1.25, max: null, requires: null, production: 0.1 },  // 全生産 +10%
+    hosaku: { cost: 1, growth: 1.6, max: 10, requires: null, spawn: 0.2, bumper: 0.1 }, // 稲穂の生える速さ +20%、豊作の穂 +10%
+    kinzan: { cost: 5, growth: 1, max: 1, requires: 'rakuichi' },  // 金山を解放
+    koudou: { cost: 8, growth: 2.0, max: 4, requires: 'kinzan', startDepth: 0.2 }, // 前の代の最深の 20% から掘り始める
+    koumyaku: { cost: 4, growth: 1.8, max: 5, requires: 'kinzan', vein: 0.3, gold: 0.2 }, // 鉱脈 +30%、金山の金 +20%
     // 軍事
     heinou: { cost: 1, growth: 1.6, max: 10, requires: null, troops: 0.5 },         // 兵の生産 +50%
     teppou: { cost: 3, growth: 1.8, max: 10, requires: 'heinou', power: 0.25 },     // 戦力 +25%
@@ -187,6 +243,8 @@ Game.config = {
     // 自動化
     ando: { cost: 30, growth: 1, max: 1, requires: 'kenchi' },     // 代の開始時に旧領を自動で回復
     fushin: { cost: 50, growth: 1, max: 1, requires: 'ando' },     // 自動普請
+    ninsoku: { cost: 10, growth: 2.2, max: 5, requires: 'hosaku', auto: 0.2 }, // 稲刈り・金山が手作業の 20% で自動で進む
+    meikou: { cost: 15, growth: 4.0, max: 3, requires: 'kinzan', toolTier: 1 }, // 鎌とツルハシを1段上から始める
     // 軍略
     kaidou: { cost: 2, growth: 1.7, max: 5, requires: null, travel: 0.1 },         // 移動時間 -10%
     monomi: { cost: 3, growth: 2.0, max: 3, requires: 'kaidou', warning: 5 },      // 侵攻の警告 +5秒

@@ -83,13 +83,30 @@
 
     <main id="main">
       <section id="tab-domestic" class="tab-panel active">
-        <div class="domestic-top">
-          <div class="click-area">
-            <button id="click-button" class="click-button">
-              <span class="click-label">開墾する</span>
-              <span id="click-amount" class="click-amount"></span>
-            </button>
+        <!-- 稲刈りと金山の作業画面（workview.js が描く）-->
+        <div class="work-panel">
+          <canvas id="work-canvas" class="work-canvas"></canvas>
+          <div class="work-side">
+            <div id="work-switch" class="work-switch hidden">
+              <button id="work-view-rice" class="btn btn-small">田んぼ</button>
+              <button id="work-view-mine" class="btn btn-small">金山</button>
+            </div>
+            <div class="work-status">
+              <div id="work-status-rice"></div>
+              <div id="work-status-mine" class="hidden"></div>
+            </div>
+            <div class="work-tool">
+              <div class="work-tool-head"><span id="work-tool-label" class="work-tool-label">鎌</span></div>
+              <div id="work-tool-name" class="work-tool-name"></div>
+              <button id="work-tool-buy" class="btn btn-small work-tool-buy"></button>
+            </div>
+            <div id="work-mine-box" class="work-mine-box hidden">
+              <div id="work-depth" class="work-depth"></div>
+              <button id="work-blast" class="btn btn-small work-blast"></button>
+            </div>
           </div>
+        </div>
+        <div class="domestic-top">
           <div class="bulk-area">
             <span class="bulk-label">一括建設</span>
             <div id="bulk-buttons" class="bulk-buttons"></div>
@@ -294,6 +311,8 @@
   <script src="js/format.js"></script>
   <script src="js/state.js"></script>
   <script src="js/systems.js"></script>
+  <script src="js/work.js"></script>
+  <script src="js/workview.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/main.js"></script>
 </body>

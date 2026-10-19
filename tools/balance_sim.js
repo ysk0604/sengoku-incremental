@@ -4,8 +4,9 @@
 //
 // 使い方：tools/balance_sim.html をブラウザで開く。URL の ? で条件を変えられる
 //   seed=1       乱数の種（同じ種なら同じ結果）
-//   clicks=5     開墾を1秒に何回押すか（0 で押さない）
-//   clickSecs=0  各代の最初のこの秒数だけ開墾を押す（0 はずっと押す）
+//   workSecs=120 各代の最初のこの秒数は、稲刈り・金山を手で作業する
+//   workShare=0.3 そのあとは、1分のうちこの割合だけ手で作業する（0 で最初だけ）
+//   cursorSpeed=500 手作業のカーソルの速さ（Canvas の座標で 1秒あたり）
 //   hours=6      ゲーム内の時間でこの時間まで
 //   gens=60      この代まで
 //   maxReign=900 隠居の好機が来なくても、治世がこの秒数になったら隠居する
@@ -24,6 +25,14 @@
 //   守り   ：本拠地以外が攻められたら、余裕をもって守りきれる兵になるまで本拠地から援軍を送る
 //   旧領   ：一括回復できるならすぐ回復
 //   家訓   ：遺徳があれば「コスト × 重み」が一番小さい家訓から習得（代の途中でも）
+//   稲刈り ：各代の最初の workSecs 秒と、そのあと1分のうち workShare の割合だけ作業画面を見て手で作業する。
+//            黄金の穂・豊作の穂が多く入る所へカーソルを動かす（速さ cursorSpeed）。金山を解放したら、最初の60秒のあとは金山を掘る
+//            （一番上の段の岩から。発破は手持ちの金の3割以下で使えるなら使う）
+//   道具   ：鎌・ツルハシは、値段が「金の毎秒生産 × 30」以下なら貯めて新調
+//   稲刈り ：各代の最初の workSecs 秒と、そのあと1分のうち workShare の割合だけ作業画面を見て手で作業する。
+//            黄金の穂・豊作の穂が多く入る所へカーソルを動かす（速さ cursorSpeed）。金山を解放したら、最初の60秒のあとは金山を掘る
+//            （一番上の段の岩から。発破は手持ちの金の3割以下で使えるなら使う）
+//   道具   ：鎌・ツルハシは、値段が「金の毎秒生産 × 30」以下なら貯めて新調
 //   隠居   ：隠居できる（治世120秒から）うえで「隠居の好機」（伸びの最大は治世120秒から測る）が出ていて、攻められる城も出陣中の部隊もなく、最後の落城から90秒たち、
 //            得る家格が今の累計の半分以上か伸びがほぼ止まったとき（ボスと合戦中は待つ）。maxReign で打ち切り
 //   跡継ぎ ：特性の価値（下の traitValue）が一番高い候補。譜代は政治の高い順
@@ -39,8 +48,9 @@
   }
   const OPT = {
     seed: param('seed', 1),
-    clicks: param('clicks', 5),
-    clickSecs: param('clickSecs', 0),
+    workSecs: param('workSecs', 120),
+    workShare: param('workShare', 0.3),
+    cursorSpeed: param('cursorSpeed', 500),
     hours: param('hours', 6),
     maxGens: param('gens', 60),
     maxReign: param('maxReign', 900),
@@ -144,6 +154,7 @@
     rakuichi: 1, kenchi: 1, fukoku: 1.2, heinou: 1, teppou: 1, joubi: 1.5,
     touyou: 2, kashindan: 2, homare: 1, eisai: 1.5,
     ando: 1, fushin: 1, kaidou: 2, monomi: 3, geigeki: 1, saihai: 2,
+    hosaku: 1, kinzan: 1, koudou: 2, koumyaku: 1.5, ninsoku: 1.5, meikou: 2,
   };
   // 跡継ぎの特性の価値（上乗せ分を、だいたい「全生産 +x」に換算）
   function traitValue(t) {
@@ -170,6 +181,7 @@
     attacks: [],   // 攻城戦の記録（段階1 の簡単さを見る）
     defeats: [],   // 攻略に失敗した記録（最初の50件）
     timeline: [],  // 最初の3代の1分ごとの様子
+    firstField: null, // 最初の田畑を建てた時間（1代目は米0から稲刈りで貯める）
     end: null,
   };
   let gen = newGenStats();
@@ -180,6 +192,7 @@
       gen: s.generation, stageStart: s.map.stage, startTime: s.stats.playTime,
       won: 0, lost: 0, defended: 0, defenseLost: 0, recovered: 0,
       firstVictoryAt: null, lastVictoryAt: null,
+      harvestRice: 0, harvestGold: 0, goldTotal: 0, // 稲刈り・金山で得た量と、金の合計（市場＋金山）
     };
   }
 
@@ -215,6 +228,102 @@
     sys.events.length = 0;
   }
 
+  // ---- 稲刈り・金山（手作業）----
+  const work = Game.work;
+  const workGain = work.gain;
+  work.gain = function (st, kind, amount) {
+    if (kind === 'rice') gen.harvestRice += amount;
+    else { gen.harvestGold += amount; gen.goldTotal += amount; }
+    workGain(st, kind, amount);
+  };
+
+  let fields = {};
+  let fieldsGen = 0;
+  let shown = null;
+  const bot = { x: 380, y: 130, tx: 380, ty: 130, retarget: 0 };
+
+  function workingNow() {
+    return s.lord.age < OPT.workSecs || (s.lord.age % 60) < 60 * OPT.workShare;
+  }
+
+  function hideWork() {
+    if (shown) {
+      work.flush(s, shown);
+      shown.cursor.inside = false;
+      shown = null;
+    }
+    work.displayed = null;
+  }
+
+  // 一番得になる所：黄金の穂・砕ける豊作の穂が多く、青い穂が少ない所（青い穂を刈ると損なので）
+  function pickRiceTarget(f) {
+    const tool = work.tool(s, 'rice');
+    const r = tool.radius + cfg.WORK.RICE.HIT_PAD;
+    let best = null;
+    let bestScore = 0;
+    f.items.forEach(function (e) {
+      let score = 0;
+      f.items.forEach(function (o) {
+        if ((o.x - e.x) * (o.x - e.x) + (o.y - e.y) * (o.y - e.y) > r * r) return;
+        const st = work.earStage(o);
+        if (st === 'bumper') {
+          const left = cfg.WORK.RICE.BUMPER_SECONDS - o.age;
+          if (o.hp / (tool.power * tool.speed) < left - 1) score += cfg.WORK.RICE.BUMPER_MULT; // 消える前に刈れるなら
+        } else {
+          score += [-0.2, 0.3, 3][st];
+        }
+      });
+      score -= Math.hypot(e.x - bot.x, e.y - bot.y) / 400; // 近い方がよい
+      if (score > bestScore) { bestScore = score; best = e; }
+    });
+    return best;
+  }
+
+  // 一番上の段の、カーソルに近い岩
+  function pickRock(f) {
+    let top = Infinity;
+    f.items.forEach(function (r) { top = Math.min(top, r.row); });
+    let best = null;
+    let bestD = Infinity;
+    f.items.forEach(function (r) {
+      if (r.row !== top) return;
+      const d = Math.hypot(r.x + r.w / 2 - bot.x, r.y + r.h / 2 - bot.y);
+      if (d < bestD) { bestD = d; best = { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
+    });
+    return best;
+  }
+
+  function moveBot(f, dt) {
+    bot.retarget -= dt;
+    if (bot.retarget <= 0) {
+      bot.retarget = 0.4;
+      const t = f.kind === 'rice' ? pickRiceTarget(f) : pickRock(f);
+      if (t) { bot.tx = t.x; bot.ty = t.y; }
+    }
+    const dx = bot.tx - bot.x;
+    const dy = bot.ty - bot.y;
+    const d = Math.hypot(dx, dy);
+    const step = OPT.cursorSpeed * dt;
+    if (d <= step) { bot.x = bot.tx; bot.y = bot.ty; } else { bot.x += dx / d * step; bot.y += dy / d * step; }
+  }
+
+  function tickWork(dt) {
+    if (fieldsGen !== s.generation) { fields = {}; fieldsGen = s.generation; shown = null; }
+    if (s.succession || !workingNow()) { hideWork(); return; }
+    // 最初の60秒は田んぼ（田畑を建てる米と、自動で進む分の記録を作る）。金山を解放したら、そのあとは金山
+    const view = work.mineUnlocked(s) && s.lord.age >= 60 ? 'mine' : 'rice';
+    s.work.view = view;
+    const f = fields[view] || (fields[view] = work.createField(s, view));
+    if (shown !== f) { hideWork(); shown = f; }
+    work.displayed = view;
+    moveBot(f, dt);
+    f.cursor.x = bot.x;
+    f.cursor.y = bot.y;
+    f.cursor.inside = true;
+    work.tickField(s, f, dt);
+    if (view === 'mine' && work.canBlast(s) && work.blastCost(s) <= s.resources.gold * 0.3) work.blast(s, f);
+  }
+
   // ---- 施設 ----
   function timeToAfford(cost, rates) {
     let t = 0;
@@ -235,6 +344,15 @@
       const c2 = sys.cost(s, 'castle', 1);
       if (timeToAfford(c2, rates) < 90) Object.keys(c2).forEach(function (r) { reserve[r] += c2[r]; });
     }
+    // 鎌・ツルハシ（金の毎秒生産 × 30 以下の値段なら貯めて新調）
+    ['rice', 'mine'].forEach(function (kind) {
+      const i = work.nextToolIndex(s, kind);
+      if (i < 0 || (kind === 'mine' && !work.mineUnlocked(s))) return;
+      const price = work.toolList(kind)[i].price;
+      if (price > rates.gold * 30) return;
+      if (s.resources.gold - reserve.gold >= price) work.buyTool(s, kind);
+      else reserve.gold += price;
+    });
     // 武将の登用（金の毎秒生産 × 60 以下の費用なら貯めて登用）
     const rc = sys.recruitCost(s);
     if (rc.gold <= rates.gold * 60 + 1e-9) {
@@ -433,7 +551,11 @@
     };
     record.riceRate = rates.rice;
     record.territoryRate = sys.territoryRice(s);
-    record.clickRate = OPT.clicks * sys.clickAmount(s);
+    record.harvestRice = gen.harvestRice;
+    record.harvestGold = gen.harvestGold;
+    record.goldTotal = gen.goldTotal;
+    record.maxDepth = s.work.maxDepth;
+    record.tools = s.work.sickle + '/' + s.work.pickaxe;
     record.generals = s.generals.length;
     sys.retire(s);
     aiPrecepts();
@@ -489,7 +611,9 @@
   let aiTimer = 0;
   let lastStage = s.map.stage;
   while (s.stats.playTime < limit && !s.flags.unified && s.generation <= OPT.maxGens) {
-    if (OPT.clicks > 0 && (!OPT.clickSecs || s.lord.age < OPT.clickSecs)) sys.gainRice(s, sys.clickAmount(s) * OPT.clicks * OPT.dt);
+    gen.goldTotal += sys.rates(s).gold * OPT.dt;
+    tickWork(OPT.dt);
+    if (rec.firstField === null && s.facilities.field > 0) rec.firstField = s.stats.playTime;
     sys.tick(s, OPT.dt);
     collectEvents();
     if (s.map.stage !== lastStage) {
@@ -516,6 +640,9 @@
     const m = Math.floor(sec / 60);
     return m + '分' + String(Math.floor(sec % 60)).padStart(2, '0') + '秒';
   }
+  function pctOf(part, total) {
+    return total > 0 ? Math.round(part / total * 100) + '%' : '';
+  }
   function hm(sec) {
     const h = Math.floor(sec / 3600);
     return (h ? h + '時間' : '') + Math.floor(sec % 3600 / 60) + '分';
@@ -537,7 +664,8 @@
   }
 
   const p = document.createElement('p');
-  p.textContent = '条件：seed=' + OPT.seed + '　開墾 ' + OPT.clicks + '回/秒' + (OPT.clickSecs ? '（各代の最初の' + OPT.clickSecs + '秒だけ）' : '') + '　上限 ' + OPT.hours + '時間・' + OPT.maxGens +
+  p.textContent = '条件：seed=' + OPT.seed + '　手作業 最初の' + OPT.workSecs + '秒・そのあと' + Math.round(OPT.workShare * 100) + '%' +
+    '　最初の田畑 ' + (rec.firstField === null ? 'なし' : rec.firstField.toFixed(1) + '秒') + '　上限 ' + OPT.hours + '時間・' + OPT.maxGens +
     '代　結果：' + (rec.end.unified ? '天下統一' : '未統一（段階' + rec.end.stage + '）') + '　' + hm(rec.end.time) +
     '・第' + rec.end.generation + '代　（計算 ' + (rec.end.wallMs / 1000).toFixed(1) + '秒）';
   document.body.appendChild(p);
@@ -564,12 +692,12 @@
     }));
 
   table('伸びの内訳（隠居する直前）', ['代', '田畑', '市場', '兵舎', '鍛冶', '城郭', '家格倍率', '城郭倍率', '内政', '家宝', '特性', '家訓', '全体倍率',
-    '米/秒（施設+領地）', 'うち領地', '開墾/秒', '武将'], rec.gens.map(function (g) {
+    '米/秒（施設+領地）', 'うち領地', '稲刈りの米', '金山の金', '最深', '鎌/ツルハシ', '武将'], rec.gens.map(function (g) {
     const f = g.facilities;
     const m = g.mult;
     return [g.gen, f.field, f.market, f.barracks, f.smithy, f.castle, fmt.mult(m.prestige), fmt.mult(m.castle), fmt.mult(m.domestic),
       fmt.mult(m.heirloom), fmt.mult(m.trait), fmt.mult(m.precept), fmt.mult(m.global), fmt.num(g.riceRate), fmt.num(g.territoryRate),
-      fmt.num(g.clickRate), g.generals];
+      pctOf(g.harvestRice, g.kokudaka), pctOf(g.harvestGold, g.goldTotal), g.maxDepth + '間', g.tools, g.generals];
   }));
   table('最初の3代の1分ごとの様子', ['代', '治世', '段階', '石高', '米/秒', '金/秒', '兵/秒', '総兵力', '1人あたり戦力', '総戦力',
     '全体倍率', '城郭', '兵舎', '鍛冶', '武将', '自領'], rec.timeline.map(function (x) {

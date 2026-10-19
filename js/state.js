@@ -48,6 +48,17 @@ window.Game = window.Game || {};
         cleared: [],       // 平定済みの段階（その段階の城はすべて領地として米を生む）
         won: [],           // この代で落とした敵城（継承で旧領になる）
       },
+      // 稲刈りと金山（道具・深さ・手作業の記録は代ごとにリセット。view は田んぼ／金山の切り替え）
+      work: {
+        view: 'rice',
+        sickle: 0,        // 鎌の番号（config の WORK.SICKLES）
+        pickaxe: 0,       // ツルハシの番号
+        depth: 0,         // 金山の今の深さ（間）
+        maxDepth: 0,      // この代の最深
+        lastMaxDepth: 0,  // 前の代の最深（坑道の記録）
+        manualRate: { rice: 0, mine: 0 }, // 手作業の稼ぎ（1秒あたりの量の単位）。自動の稼ぎの元
+        blastCd: 0,       // 発破のクールダウン（秒）
+      },
       heirlooms: [],     // 手に入れた家宝のID
       units: [],         // 出陣中の部隊
       nextUnitId: 1,
@@ -336,6 +347,20 @@ window.Game = window.Game || {};
     s.generationVirtue = Math.max(0, s.generationVirtue);
   }
 
+  // 稲刈りと金山：道具の番号・深さを範囲に収める
+  function sanitizeWork(s) {
+    const w = s.work;
+    const clampIndex = function (v, list) { return Number.isInteger(v) ? Math.min(list.length - 1, Math.max(0, v)) : 0; };
+    w.view = w.view === 'mine' ? 'mine' : 'rice';
+    w.sickle = clampIndex(w.sickle, cfg.WORK.SICKLES);
+    w.pickaxe = clampIndex(w.pickaxe, cfg.WORK.PICKAXES);
+    ['depth', 'maxDepth', 'lastMaxDepth'].forEach(function (k) { w[k] = Math.max(0, Math.floor(w[k])); });
+    w.maxDepth = Math.max(w.maxDepth, w.depth);
+    w.manualRate.rice = Math.max(0, w.manualRate.rice);
+    w.manualRate.mine = Math.max(0, w.manualRate.mine);
+    w.blastCd = Math.max(0, w.blastCd);
+  }
+
   // 読み込んだ JSON をゲーム状態にする（古い形式・壊れた値はここで直す）
   function fromParsed(parsed) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('セーブデータの形が違います');
@@ -345,6 +370,7 @@ window.Game = window.Game || {};
     sanitizeMap(loaded, parsed);
     sanitizeLineage(loaded, parsed);
     sanitizePrecepts(loaded, parsed);
+    sanitizeWork(loaded);
     return loaded;
   }
 

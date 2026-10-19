@@ -188,40 +188,42 @@ button {
   margin-bottom: 16px;
 }
 
-.click-button {
-  position: relative;
-  width: 200px;
-  height: 84px;
-  border: 2px solid var(--vermilion-dark);
-  background: var(--vermilion);
-  color: var(--paper-light);
+/* 稲刈りと金山の作業画面（Canvas は 760×260。狭い画面では縮める）*/
+.work-panel {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.work-canvas {
+  display: block;
+  flex: 0 1 760px;
+  min-width: 0;
+  width: 100%;
+  max-width: 760px;
+  aspect-ratio: 760 / 260;
+  border: 2px solid var(--ink);
   border-radius: 4px;
-  cursor: pointer;
+  background: #8f9a5c;
+  cursor: crosshair;
+}
+.work-side {
+  flex: 0 0 200px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  transition: transform 0.05s;
+  gap: 10px;
+  font-size: 13px;
 }
-.click-button:active { transform: scale(0.96); }
-.click-label { font-size: 22px; font-weight: bold; letter-spacing: 0.2em; }
-.click-amount { font-size: 13px; }
-
-.float-text {
-  position: absolute;
-  top: 10px;
-  color: var(--gold);
-  font-weight: bold;
-  font-size: 18px;
-  pointer-events: none;
-  text-shadow: 0 0 2px var(--paper-light);
-  animation: float-up 0.8s ease-out forwards;
-}
-@keyframes float-up {
-  from { transform: translateY(0); opacity: 1; }
-  to { transform: translateY(-50px); opacity: 0; }
-}
+.work-switch { display: flex; }
+.work-switch .btn { flex: 1; margin-left: -1px; }
+.work-switch .btn.active { background: var(--ink); color: var(--paper-light); }
+.work-status { color: var(--ink-soft); line-height: 1.6; }
+.work-tool { border-top: 1px solid var(--line); padding-top: 8px; }
+.work-tool-label { font-weight: bold; }
+.work-tool-name { margin: 4px 0 6px; }
+.work-tool-buy, .work-blast { width: 100%; }
+.work-mine-box { border-top: 1px solid var(--line); padding-top: 8px; }
+.work-depth { margin-bottom: 6px; }
 
 .bulk-area { display: flex; align-items: center; gap: 10px; }
 .bulk-label { font-size: 14px; color: var(--ink-soft); }

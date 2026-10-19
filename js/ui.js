@@ -99,23 +99,6 @@ window.Game = window.Game || {};
     });
   }
 
-  function bindClick() {
-    const btn = $('click-button');
-    btn.addEventListener('click', function () {
-      const amount = sys.click(cur());
-      spawnFloat(btn, '+' + fmt.num(amount));
-      update();
-    });
-  }
-
-  // クリック時に浮かび上がる数字（transform / opacity のみのアニメーション）
-  function spawnFloat(parent, text) {
-    const f = make('span', 'float-text', text);
-    f.style.left = (35 + Math.random() * 30) + '%';
-    f.addEventListener('animationend', function () { f.remove(); });
-    parent.appendChild(f);
-  }
-
   // ---- 武将 ----
 
   // 武将カードは登用・配置変更のときだけ作り直す（毎ティックは作り直さない）
@@ -1638,7 +1621,6 @@ window.Game = window.Game || {};
     const fushin = sys.preceptLevel(s, 'fushin') > 0;
     setClass(els.autoBuild, 'hidden', !fushin);
     if (fushin && els.autoBuildCheck.checked !== s.settings.autoBuild) els.autoBuildCheck.checked = s.settings.autoBuild;
-    setText(els.clickAmount, '+' + fmt.num(sys.clickAmount(s)) + ' 石');
     const look = sys.castleLook(s);
     setText(els.castleLook, data.CASTLE_LOOKS[look]);
     setText(els.castleLevel, '城郭 Lv' + s.facilities.castle);
@@ -1646,6 +1628,7 @@ window.Game = window.Game || {};
     Object.keys(bulkEls).forEach(function (key) {
       setClass(bulkEls[key], 'active', s.settings.bulk === key);
     });
+    Game.workView.update(s);
     updateFacilities(s);
     updateGenerals(s);
     updateMap(s);
@@ -1661,7 +1644,6 @@ window.Game = window.Game || {};
     els.res = { rice: $('res-rice'), gold: $('res-gold'), troops: $('res-troops') };
     els.rate = { rice: $('rate-rice'), gold: $('rate-gold'), troops: $('rate-troops') };
     els.power = $('power-value');
-    els.clickAmount = $('click-amount');
     els.recruitButton = $('recruit-button');
     els.recruitCost = $('recruit-cost');
     els.generalList = $('general-list');
@@ -1724,12 +1706,12 @@ window.Game = window.Game || {};
 
     buildFacilities();
     buildBulkButtons();
-    bindClick();
     bindGenerals();
     bindMap();
     bindTabs();
     bindSettings();
     bindPrecepts();
+    Game.workView.init();
     update();
   }
 

@@ -172,6 +172,10 @@ window.Game = window.Game || {};
       case 'rakuichi': return '金の生産 +' + pct(p.gold);
       case 'kenchi': return '代の開始時に田畑 Lv' + p.startFieldByLevel[Math.max(0, lv - 1)];
       case 'fukoku': return '全生産 +' + pct(p.production);
+      case 'hosaku': return '稲穂の生える速さ +' + pct(p.spawn) + '、豊作の穂の出やすさ +' + pct(p.bumper);
+      case 'kinzan': return '金山を解放する（内政タブの作業画面で切り替え）';
+      case 'koudou': return '代の開始時に、前の代の最深の ' + pct(p.startDepth) + ' の深さから掘り始める';
+      case 'koumyaku': return '金の鉱脈の出やすさ +' + pct(p.vein) + '、金山の金 +' + pct(p.gold);
       case 'heinou': return '兵の生産 +' + pct(p.troops);
       case 'teppou': return '戦力 +' + pct(p.power);
       case 'joubi': return '代の開始時に、一番弱い敵城の守備兵 ×' + (p.startTroops * lv) + ' の待機兵';
@@ -181,6 +185,8 @@ window.Game = window.Game || {};
       case 'eisai': return '跡継ぎ候補 +' + (p.heirCandidates * lv) + '人';
       case 'ando': return '代の開始時に、今の地図の旧領を自動で回復';
       case 'fushin': return '毎秒、買える施設のうち最も安いものを自動で1つ建設';
+      case 'ninsoku': return '稲刈りと金山が、手作業の稼ぎの ' + pct(p.auto) + ' で自動で進む（画面を見ていなくても）';
+      case 'meikou': return '代の開始時に、鎌とツルハシを ' + (p.toolTier * lv) + '段上の道具から始める';
       case 'kaidou': return '進軍の移動時間 -' + pct(p.travel);
       case 'monomi': return '侵攻の警告 +' + (p.warning * lv) + '秒';
       case 'geigeki': return '侵攻を受けた自領へ、待機兵から自動で援軍を送る';
@@ -1418,23 +1424,9 @@ window.Game = window.Game || {};
     return r * sys.resourceMultiplier(s, 'rice');
   };
 
-  // ---- 開墾クリック ----
-  sys.clickAmount = function (s) {
-    const c = cfg.CLICK;
-    const steps = Math.floor(s.facilities.field / c.FIELD_LEVEL_STEP);
-    return c.BASE_RICE * sys.resourceMultiplier(s, 'rice') + steps * c.RATE_SHARE_PER_STEP * sys.rates(s).rice;
-  };
-
   sys.gainRice = function (s, amount) {
     s.resources.rice += amount;
     s.kokudaka += amount;
-  };
-
-  sys.click = function (s) {
-    if (s.succession) return 0;
-    const amount = sys.clickAmount(s);
-    sys.gainRice(s, amount);
-    return amount;
   };
 
   // ---- 隠居と家督継承 ----
@@ -1668,6 +1660,7 @@ window.Game = window.Game || {};
     sys.events.length = 0;
     autoBuildTimer = 0;
 
+    Game.work.newGeneration(s); // 鎌・ツルハシ・金山の深さ
     s.resources.troops = sys.standingArmy(s); // 常備兵
     if (sys.preceptLevel(s, 'ando')) {
       // 旧領安堵：今の地図の旧領を、兵を使わずにすべて取り戻す
@@ -1745,6 +1738,7 @@ window.Game = window.Game || {};
     s.resources.troops += r.troops * dt;
     sys.tickUnits(s, dt);
     tickAutoBuild(s, dt);
+    Game.work.tick(s, dt); // 稲刈り・金山の自動の稼ぎ
     s.stats.playTime += dt;
 
     s.lord.age += dt;
