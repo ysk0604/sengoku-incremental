@@ -33,7 +33,7 @@ window.Game = window.Game || {};
       formerLands: [],   // 旧領：前の代までに落とした敵城のID（守備兵が 1/10 になる）
       lineage: [],       // 歴代当主の記録
       succession: null,  // 継承の手続き中（null でなければ時間を止めて継承画面を出す）
-      resources: { rice: 0, gold: 0, troops: 0, merit: 0 }, // troops = 本拠地の待機兵
+      resources: { rice: 0, gold: 0, troops: 0 }, // troops = 本拠地の待機兵
       kokudaka: 0, // その代の米の累計獲得量
       facilities: facilities,
       generals: [],
@@ -59,13 +59,22 @@ window.Game = window.Game || {};
         manualRate: { rice: 0, mine: 0 }, // 手作業の稼ぎ（1秒あたりの量の単位）。自動の稼ぎの元
         blastCd: 0,       // 発破のクールダウン（秒）
       },
+      // イベント（4.8）
+      pendingEvents: [], // 選ぶのを待っているイベントのID（選ぶまで時間を止める）
+      eventsDone: [],    // この周で起きたイベントのID（1周に一度だけ）
+      eventEffects: { goodRecruit: false, heirGradeUp: 0, heirExtra: 0 }, // 次の登用・次の継承に効くもの
+      genBuffs: { power: 1, homeDefense: 1 }, // この代だけの補正（一揆の鎮圧・謀反への備え）
+      // 天下統一と周回
+      ending: null,      // 天下統一したときの記録 { time, generations, maxKokudaka }
+      cycle: 1,          // 何周目か
+      cycles: [],        // 前の周の記録 [{ cycle, time, generations, maxKokudaka }]
       heirlooms: [],     // 手に入れた家宝のID
       units: [],         // 出陣中の部隊
       nextUnitId: 1,
       invasions: [],     // 敵の侵攻軍
       nextInvasionId: 1,
       battles: [],       // 進行中の合戦（攻城戦・防衛戦・野戦。采配の効果時間・クールダウン）
-      flags: { firstVictory: false, unified: false },
+      flags: { firstVictory: false, unified: false, endingSeen: false },
       settings: { bulk: cfg.DEFAULT_BULK, autoBuild: true }, // autoBuild：自動普請のON/OFF
       stats: { playTime: 0, battlesWon: 0 },
     };
@@ -361,6 +370,28 @@ window.Game = window.Game || {};
     w.blastCd = Math.max(0, w.blastCd);
   }
 
+  // イベント・周回：知っているIDだけ残し、記録の形を確かめる
+  function sanitizeEvents(s, raw) {
+    const ids = Object.keys(cfg.EVENTS);
+    const known = function (list) {
+      return (Array.isArray(list) ? list : []).filter(function (id, i, arr) { return ids.indexOf(id) >= 0 && arr.indexOf(id) === i; });
+    };
+    s.eventsDone = known(raw.eventsDone);
+    s.pendingEvents = known(raw.pendingEvents).filter(function (id) { return s.eventsDone.indexOf(id) < 0; });
+    s.eventEffects.goodRecruit = s.eventEffects.goodRecruit === true;
+    s.eventEffects.heirGradeUp = Math.max(0, s.eventEffects.heirGradeUp);
+    s.eventEffects.heirExtra = Math.max(0, Math.floor(s.eventEffects.heirExtra));
+    s.genBuffs.power = s.genBuffs.power > 0 ? s.genBuffs.power : 1;
+    s.genBuffs.homeDefense = s.genBuffs.homeDefense > 0 ? s.genBuffs.homeDefense : 1;
+    const record = function (r) {
+      return r && typeof r === 'object' && isNum(r.time) && isNum(r.generations) && isNum(r.maxKokudaka)
+        ? { cycle: isNum(r.cycle) ? r.cycle : 1, time: r.time, generations: r.generations, maxKokudaka: r.maxKokudaka } : null;
+    };
+    s.ending = s.flags.unified ? record(raw.ending) || { time: s.stats.playTime, generations: s.generation, maxKokudaka: s.kokudaka } : null;
+    s.cycles = (Array.isArray(raw.cycles) ? raw.cycles : []).map(record).filter(function (r) { return r; });
+    s.cycle = Number.isInteger(s.cycle) && s.cycle >= 1 ? s.cycle : 1;
+  }
+
   // 読み込んだ JSON をゲーム状態にする（古い形式・壊れた値はここで直す）
   function fromParsed(parsed) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('セーブデータの形が違います');
@@ -371,6 +402,7 @@ window.Game = window.Game || {};
     sanitizeLineage(loaded, parsed);
     sanitizePrecepts(loaded, parsed);
     sanitizeWork(loaded);
+    sanitizeEvents(loaded, parsed);
     return loaded;
   }
 

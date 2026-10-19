@@ -6,7 +6,6 @@ Game.data = {
     rice: { name: '米', unit: '石' },
     gold: { name: '金', unit: '貫' },
     troops: { name: '兵', unit: '人' },
-    merit: { name: '功績', unit: '' },
   },
 
   // 表示順に並べる
@@ -194,6 +193,15 @@ Game.data = {
   // ---- 稲刈りと金山の道具（数値は config.js の WORK.SICKLES / PICKAXES）----
   SICKLE_NAMES: ['錆びた鎌', '鉄の鎌', '鋼の鎌', '名工の鎌', '天下の大鎌'],
   PICKAXE_NAMES: ['鉄のツルハシ', '鋼のツルハシ', '名工のツルハシ', '天下のツルハシ'],
+
+  // ---- イベント（数値は config.js の EVENTS。選択肢の説明は systems.eventChoiceText）----
+  EVENTS: {
+    merchant: { title: '旅の商人が来た', text: '珍しい品を携えた旅の商人が、城下を訪ねてきた。「何かお役に立てることは」', choices: ['品を買い取らせる', '人の噂を聞く'] },
+    marriage: { title: '隣国の姫との縁談', text: '尾張の国人たちをまとめつつある当家に、隣国から姫との縁談が持ち込まれた。', choices: ['家柄の良い姫を迎える', '子だくさんの家と結ぶ'] },
+    ikki: { title: '一揆が起きた', text: '重い年貢に耐えかねた百姓たちが、一揆を起こした。', choices: ['米を配る', '鎮圧する'] },
+    alliance: { title: '大大名からの同盟の誘い', text: '東国の大大名から、同盟の誘いが届いた。「手を結べば、一国を任せよう」', choices: ['受ける', '断る'] },
+    rebellion: { title: '本拠地で謀反の噂', text: '天下を目前にして、本拠地の家臣に謀反の噂が立っている。', choices: ['備える', '無視する'] },
+  },
 
   // ---- 家宝（効果の数値は config.js の HEIRLOOMS）----
   HEIRLOOMS: [

@@ -824,7 +824,6 @@ window.Game = window.Game || {};
         const lines = [
           ['損害', n(ev.lost) + ' 人'],
           ['城の守備兵', n(ev.survivors) + ' 人（残った兵が守る）'],
-          ['功績', '+' + n(ev.merit)],
           ['遺徳', '+' + n(ev.virtue) + (ev.boss ? '（ボスを倒した分を含む）' : '')],
           ['領地', '米 ' + fmt.rate(ev.income) + '（この代のあいだ）'],
         ];
@@ -848,12 +847,10 @@ window.Game = window.Game || {};
           ['取り戻した城', ev.names.join('・')],
           ['使った兵', n(ev.cost) + ' 人'],
           ['守備兵', '0 人（補充を送るまで守りは手薄）'],
-          ['功績・遺徳', 'なし（旧領の回復では得られない）'],
+          ['遺徳', 'なし（旧領の回復では得られない）'],
         ] };
       case 'unified':
-        return { win: true, image: '天下統一', title: '天下統一！', lines: [
-          ['結果', 'すべての段階を平定した（エンディングはステップ5で作ります）'],
-        ] };
+        return null; // エンディングの画面を出す（updateEnding）
       case 'defeat':
         return { win: false, image: ev.boss ? '決戦' : '合戦', title: ev.name + ' の攻略に失敗…', lines: [
           ['損害', n(ev.lost) + ' 人（全滅）'],
@@ -863,7 +860,6 @@ window.Game = window.Game || {};
         return { win: true, image: '野戦', title: ev.name + ' を街道で撃退！', lines: [
           ['撃退', '敵兵 ' + n(Math.ceil(ev.defeated)) + ' 人'],
           ['損害', n(ev.lost) + ' 人'],
-          ['功績', '+' + n(ev.merit)],
           ['遺徳', '+' + n(ev.virtue)],
           ['部隊', '目的地へ進軍を続ける'],
         ] };
@@ -876,7 +872,6 @@ window.Game = window.Game || {};
         return { win: true, image: '防衛', title: ev.target + ' を守りきった！', lines: [
           ['撃退', '敵兵 ' + n(Math.ceil(ev.defeated)) + ' 人'],
           ['損害', n(ev.lost) + ' 人'],
-          ['功績', '+' + n(ev.merit)],
           ['遺徳', '+' + n(ev.virtue)],
         ] };
       case 'defenseLose':
@@ -1155,7 +1150,7 @@ window.Game = window.Game || {};
   }
 
   function generationTitle(s, gen) {
-    return s.houseName + ' 第' + fmt.kanji(gen) + '代';
+    return s.houseName + ' 第' + fmt.kanji(gen) + '代' + (s.cycle > 1 ? '（' + fmt.kanji(s.cycle) + '周目）' : '');
   }
 
   function resultRows(parent, rows) {
@@ -1226,7 +1221,7 @@ window.Game = window.Game || {};
       ]);
       body.appendChild(rows);
       body.appendChild(make('div', 'note succession-note',
-        '米・金・兵・功績・施設・武将（譜代を除く）・この段階の領地は失われます。' +
+        '米・金・兵・施設・武将（譜代を除く）・この段階の領地は失われます。' +
         '家格・遺徳・家訓・家宝・譜代家臣・平定済みの段階・旧領の記録は引き継がれます。'));
       const next = make('button', 'btn succession-next', '家訓を定める');
       next.addEventListener('click', function () {
@@ -1246,7 +1241,9 @@ window.Game = window.Game || {};
     } else if (sc.step === 'heir') {
       body.appendChild(make('h2', 'succession-title', '跡継ぎを選ぶ'));
       body.appendChild(make('div', 'note', '格が上がる確率 ' +
-        Math.round(sys.gradeUpChance(s.prestige + gained) * 100) + '%（累計家格が高いほど上がる）'));
+        Math.round(sys.gradeUpChance(s.prestige + gained, s.eventEffects.heirGradeUp) * 100) + '%（累計家格が高いほど上がる）' +
+        (s.eventEffects.heirGradeUp ? '　縁談で +' + Math.round(s.eventEffects.heirGradeUp * 100) + '%' : '') +
+        (s.eventEffects.heirExtra ? '　縁談で候補 +' + s.eventEffects.heirExtra + '人' : '')));
       const list = make('div', 'heir-list');
       sc.candidates.forEach(function (c, i) {
         const top = maxGrade(c.traits);
@@ -1547,6 +1544,128 @@ window.Game = window.Game || {};
     });
   }
 
+  // ---- イベント（選ぶまで時間が止まる）----
+
+  const eventUi = { id: null, result: null }; // 表示中のイベントと、選んだあとの結果の一文
+
+  function showEventChoices(s, id) {
+    const d = data.EVENTS[id];
+    setText($('event-title'), d.title);
+    setText($('event-text'), d.text);
+    [0, 1].forEach(function (i) {
+      const b = $('event-choice-' + i);
+      setText(b.querySelector('.event-choice-label'), d.choices[i]);
+      setText(b.querySelector('.event-choice-desc'), sys.eventChoiceText(id, i));
+    });
+  }
+
+  function updateEvent(s) {
+    const id = s.pendingEvents[0] || null;
+    if (eventUi.result === null && id !== eventUi.id) {
+      eventUi.id = id;
+      if (id) showEventChoices(s, id);
+    }
+    const open = eventUi.result !== null || (!!id && !s.succession);
+    setClass(els.eventModal, 'hidden', !open);
+    setClass($('event-choices'), 'hidden', eventUi.result !== null);
+    setClass($('event-result'), 'hidden', eventUi.result === null);
+    if (eventUi.result !== null) setText($('event-result-text'), eventUi.result);
+  }
+
+  function bindEvents() {
+    [0, 1].forEach(function (i) {
+      $('event-choice-' + i).addEventListener('click', function () {
+        const result = sys.resolveEvent(cur(), i);
+        if (result === null) return;
+        eventUi.result = result;
+        Game.state.save();
+        update();
+      });
+    });
+    $('event-close').addEventListener('click', function () {
+      eventUi.result = null;
+      eventUi.id = null; // 次のイベントがあれば続けて出す
+      update();
+    });
+    $('ending-close').addEventListener('click', function () {
+      cur().flags.endingSeen = true;
+      Game.state.save();
+      update();
+    });
+    $('open-ending').addEventListener('click', function () {
+      cur().flags.endingSeen = false;
+      update();
+    });
+    $('ending-new-cycle').addEventListener('click', function () {
+      if (!confirm('新たな周回を始めますか？（家格・家宝・歴代の当主はリセットされます。家訓と遺徳は引き継ぎます）')) return;
+      const next = sys.newCycle(cur());
+      if (!next) return;
+      Game.state.current = next;
+      Game.state.save();
+      update();
+    });
+  }
+
+  // ---- エンディングと周回の記録 ----
+
+  function formatLong(sec) {
+    const h = Math.floor(sec / 3600);
+    return (h ? h + '時間' : '') + formatSeconds(sec % 3600);
+  }
+
+  let cyclesKey = null;
+
+  function updateEnding(s) {
+    const e = s.ending;
+    const show = !!e && s.flags.unified && !s.flags.endingSeen && !s.pendingEvents.length && !s.succession;
+    setClass(els.endingModal, 'hidden', !show);
+    if (e) {
+      setText($('ending-text'), s.houseName + 'は、' + (s.cycle > 1 ? fmt.kanji(s.cycle) + '度目の' : '') +
+        '天下統一を成し遂げた。村ひとつの小領主から始まった家は、代を重ねて天下人となった。');
+      setText($('ending-time'), formatLong(e.time));
+      setText($('ending-generations'), '第' + fmt.kanji(e.generations) + '代');
+      setText($('ending-kokudaka'), fmt.num(e.maxKokudaka) + ' 石');
+      setText($('unified-text'), '天下統一（' + formatLong(e.time) + '・第' + fmt.kanji(e.generations) + '代）');
+    }
+    setClass(els.unifiedBox, 'hidden', !e);
+
+    const key = String(s.cycles.length);
+    if (key !== cyclesKey) {
+      cyclesKey = key;
+      setClass(els.cycleBox, 'hidden', !s.cycles.length);
+      els.cycleRows.textContent = '';
+      s.cycles.forEach(function (c) {
+        const tr = make('tr');
+        [fmt.kanji(c.cycle) + '周目', formatLong(c.time), '第' + fmt.kanji(c.generations) + '代', fmt.num(c.maxKokudaka)].forEach(function (v) {
+          tr.appendChild(make('td', '', v));
+        });
+        els.cycleRows.appendChild(tr);
+      });
+    }
+  }
+
+  // ---- 開発用の速度倍率 ----
+  const devSpeedEls = {};
+
+  function buildDevSpeed() {
+    const box = $('dev-speed-buttons');
+    cfg.DEV_SPEEDS.forEach(function (v) {
+      const b = make('button', 'btn bulk-button', '×' + v);
+      b.addEventListener('click', function () {
+        Game.devSpeed = v;
+        update();
+      });
+      box.appendChild(b);
+      devSpeedEls[v] = b;
+    });
+  }
+
+  function updateDevSpeed() {
+    Object.keys(devSpeedEls).forEach(function (v) {
+      setClass(devSpeedEls[v], 'active', Number(v) === Game.devSpeed);
+    });
+  }
+
   // ---- 更新 ----
 
   function updateHeader(s) {
@@ -1559,7 +1678,6 @@ window.Game = window.Game || {};
       setText(els.rate[res], rates[res] > 0 ? fmt.rate(rates[res]) : '');
     });
     setText(els.power, fmt.num(sys.power(s)));
-    setText(els.merit, fmt.num(s.resources.merit));
     setText(els.virtue, fmt.num(s.virtue));
 
     const t = Game.state.lastSavedAt;
@@ -1616,6 +1734,9 @@ window.Game = window.Game || {};
       stateRef = s;
       lineageKey = null;
       successionKey = null;
+      cyclesKey = null;
+      eventUi.id = null;
+      eventUi.result = null;
     }
     updateHeader(s);
     const fushin = sys.preceptLevel(s, 'fushin') > 0;
@@ -1635,6 +1756,9 @@ window.Game = window.Game || {};
     updateLineage(s);
     updatePreceptModal(s);
     updateSuccession(s);
+    updateEvent(s);
+    updateEnding(s);
+    updateDevSpeed();
   }
 
   function init() {
@@ -1672,7 +1796,6 @@ window.Game = window.Game || {};
     els.resultTitle = $('result-title');
     els.resultBody = $('result-body');
     els.resultClose = $('result-close');
-    els.merit = $('merit-value');
     els.castleImage = $('castle-image');
     els.castleLook = $('castle-look');
     els.castleLevel = $('castle-level');
@@ -1703,6 +1826,11 @@ window.Game = window.Game || {};
     els.preceptBody = $('precept-body');
     els.autoBuild = $('auto-build');
     els.autoBuildCheck = $('auto-build-check');
+    els.eventModal = $('event-modal');
+    els.endingModal = $('ending-modal');
+    els.unifiedBox = $('unified-box');
+    els.cycleBox = $('cycle-box');
+    els.cycleRows = $('cycle-rows');
 
     buildFacilities();
     buildBulkButtons();
@@ -1711,6 +1839,8 @@ window.Game = window.Game || {};
     bindTabs();
     bindSettings();
     bindPrecepts();
+    bindEvents();
+    buildDevSpeed();
     Game.workView.init();
     update();
   }

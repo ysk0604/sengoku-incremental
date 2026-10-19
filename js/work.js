@@ -320,7 +320,7 @@ window.Game = window.Game || {};
 
   // 作業画面を dt 秒進める（画面に出しているときだけ呼ぶ）
   work.tickField = function (s, f, dt) {
-    if (s.succession) return;
+    if (sys.isPaused(s)) return; // 継承の手続き中・イベントを選ぶまでは止める
     f.drops = f.drops.filter(function (d) {
       d.t += dt;
       if (d.t < W.DROP_SECONDS) return true;

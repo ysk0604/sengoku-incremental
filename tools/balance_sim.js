@@ -36,6 +36,7 @@
 //   隠居   ：隠居できる（治世120秒から）うえで「隠居の好機」（伸びの最大は治世120秒から測る）が出ていて、攻められる城も出陣中の部隊もなく、最後の落城から90秒たち、
 //            得る家格が今の累計の半分以上か伸びがほぼ止まったとき（ボスと合戦中は待つ）。maxReign で打ち切り
 //   跡継ぎ ：特性の価値（下の traitValue）が一番高い候補。譜代は政治の高い順
+//   イベント：旅の商人は良将、縁談は候補 +1人、一揆は米を配る（遺徳）、同盟は受ける（併合）、謀反は備える
 (function () {
   const cfg = Game.config;
   const data = Game.data;
@@ -156,6 +157,9 @@
     ando: 1, fushin: 1, kaidou: 2, monomi: 3, geigeki: 1, saihai: 2,
     hosaku: 1, kinzan: 1, koudou: 2, koumyaku: 1.5, ninsoku: 1.5, meikou: 2,
   };
+  // イベントの選択（0 が選択肢A、1 が選択肢B）
+  const EVENT_CHOICE = { merchant: 1, marriage: 1, ikki: 0, alliance: 0, rebellion: 0 };
+
   // 跡継ぎの特性の価値（上乗せ分を、だいたい「全生産 +x」に換算）
   function traitValue(t) {
     const m = cfg.TRAIT_GRADE.MULTS[t.grade - 1];
@@ -181,6 +185,7 @@
     attacks: [],   // 攻城戦の記録（段階1 の簡単さを見る）
     defeats: [],   // 攻略に失敗した記録（最初の50件）
     timeline: [],  // 最初の3代の1分ごとの様子
+    events: [],    // 起きたイベントと選んだ結果
     firstField: null, // 最初の田畑を建てた時間（1代目は米0から稲刈りで貯める）
     end: null,
   };
@@ -615,6 +620,11 @@
     tickWork(OPT.dt);
     if (rec.firstField === null && s.facilities.field > 0) rec.firstField = s.stats.playTime;
     sys.tick(s, OPT.dt);
+    // イベント：選ぶまで時間が止まるので、すぐ選ぶ（EVENT_CHOICE）
+    while (s.pendingEvents.length) {
+      const id = s.pendingEvents[0];
+      rec.events.push({ id: id, gen: s.generation, choice: EVENT_CHOICE[id], result: sys.resolveEvent(s, EVENT_CHOICE[id]) });
+    }
     collectEvents();
     if (s.map.stage !== lastStage) {
       lastStage = s.map.stage;
@@ -677,6 +687,9 @@
 
   table('段階に初めて入った代と時間', ['段階', '代', '合計プレイ時間'], rec.stages.map(function (x) {
     return [x.stage + ' ' + data.STAGES[x.stage - 1].name, '第' + x.gen + '代', hm(x.time)];
+  }));
+  table('イベント', ['代', 'イベント', '選んだもの', '結果'], rec.events.map(function (e) {
+    return ['第' + e.gen + '代', data.EVENTS[e.id].title, data.EVENTS[e.id].choices[e.choice], e.result];
   }));
   table('代ごとの記録', ['代', '段階', '治世', '石高', '家格', '累計家格', '遺徳', '落城', '敗北', '防衛 成功/失敗', '隠居', '当主の特性', '累計時間'],
     rec.gens.map(function (g) {

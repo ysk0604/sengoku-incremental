@@ -5,7 +5,9 @@ Game.config = {
   // ---- ゲームループ ----
   TICK_MS: 100,             // 更新間隔（1秒10ティック）
   MAX_TICK_SECONDS: 1,      // 1ティックで進める最大秒数（スリープ復帰などで時間が飛ばないように）
-  DEV_SPEED: 1,             // 開発用の速度倍率（設定画面の実装はステップ5以降）
+  DEV_SPEED: 1,             // 開発用の速度倍率の初期値（設定タブの開発用ボタンで切り替える。セーブしない）
+  DEV_SPEEDS: [1, 10, 100], // 切り替えられる速度倍率
+  STEP_SECONDS: 0.1,        // 速度倍率を上げたときも、1回に進めるのはこの秒数まで（合戦の計算が粗くならないように）
   DEV_TOOLS: true,          // 設定タブに開発用ボタンを表示する（公開時は false）
 
   // ---- セーブ ----
@@ -155,7 +157,6 @@ Game.config = {
     RETREAT_PURSUIT_SECONDS: 3, // 退却を始めてから追撃を受ける秒数
     // 勝利報酬
     TERRITORY_RICE_RATE: 0.0002, // 領地：米 +敵兵力 × この値 /秒（全体倍率がかかる）
-    MERIT_RATE: 0.1,           // 功績 +敵兵力 × この値
   },
 
   // ---- 当主と家督継承 ----
@@ -251,6 +252,15 @@ Game.config = {
     geigeki: { cost: 25, growth: 1, max: 1, requires: 'monomi' },  // 自動迎撃
     saihai: { cost: 5, growth: 2.0, max: 4, requires: 'kaidou', cooldown: 0.15 },  // 采配のクールダウン -15%
   },
+  // ---- イベント（4.8。1周に一度だけ起きる。選択肢は2つ）----
+  EVENTS: {
+    merchant: { kokudaka: 1000, gold: 100 },                   // 旅の商人：A 金 / B 次の登用が良将以上
+    marriage: { stage: 2, gradeUp: 0.2, extraCandidates: 1 },  // 隣国の姫との縁談：次の継承で A 格が上がりやすい / B 候補 +1人
+    ikki: { stage: 3, riceLoss: 0.3, virtuePerStage: 10, troopLoss: 0.2, power: 1.1 }, // 一揆：A 米を配る / B 鎮圧
+    alliance: { stage: 4, virtuePerStage: 10 },                // 同盟の誘い：A 1勢力を併合 / B 断る（遺徳）
+    rebellion: { stage: 5, power: 0.9, homeDefense: 2, chance: 0.2, troopLoss: 0.5 }, // 謀反の噂：A 備える / B 無視
+  },
+
   AUTO_BUILD_INTERVAL: 1,          // 自動普請：この秒数ごとに1つ建てる
   AUTO_DEFENSE_POWER_RATIO: 1.5,   // 自動迎撃：守備戦力が侵攻軍の戦力のこの倍率に届く分まで援軍を送る
 
@@ -266,7 +276,6 @@ Game.config = {
     MIN_TROOPS: 1,          // これより少ない侵攻軍は出さない
     POWER_MULT: 1,          // 侵攻軍の戦力 = 兵 × この値
     DEFENSE_PER_CASTLE_LEVEL: 0.2, // 守備戦力 = 守備兵の戦力 × (1 + 城郭Lv × この値)
-    MERIT_RATE: 0.2,        // 守りきったら 功績 +侵攻軍の兵力 × この値
     HOME_LOOT_RATE: 0.2,    // 本拠地で負けたら米と金をこの割合奪われる
   },
 

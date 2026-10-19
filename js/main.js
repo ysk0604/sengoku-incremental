@@ -4,15 +4,21 @@ window.Game = window.Game || {};
 (function () {
   const cfg = Game.config;
   let lastTime = Date.now();
+  Game.devSpeed = cfg.DEV_SPEED; // 開発用の速度倍率（設定タブで切り替える）
 
   function loop() {
     const now = Date.now();
     let dt = (now - lastTime) / 1000;
     lastTime = now;
     // 時計の巻き戻りや長時間の停止（スリープ等）で時間が飛ばないように制限
-    dt = Math.max(0, Math.min(dt, cfg.MAX_TICK_SECONDS)) * cfg.DEV_SPEED;
+    dt = Math.max(0, Math.min(dt, cfg.MAX_TICK_SECONDS)) * Game.devSpeed;
 
-    Game.systems.tick(Game.state.current, dt);
+    // 速度倍率を上げたときは細かく分けて進める
+    while (dt > 1e-9) {
+      const step = Math.min(dt, cfg.STEP_SECONDS);
+      Game.systems.tick(Game.state.current, step);
+      dt -= step;
+    }
     Game.ui.update();
   }
 

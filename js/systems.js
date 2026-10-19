@@ -410,8 +410,10 @@ window.Game = window.Game || {};
     return weights;
   };
 
+  // 旅の商人の「次の登用は良将以上」が残っていれば、並を外して選ぶ
   sys.rollRarity = function (s) {
     const weights = sys.rarityWeights(s);
+    if (s.eventEffects.goodRecruit) weights[0] = 0;
     const total = weights.reduce(function (sum, w) { return sum + w; }, 0);
     let roll = Math.random() * total;
     for (let i = 0; i < GEN.RARITIES.length; i++) {
@@ -446,6 +448,7 @@ window.Game = window.Game || {};
     s.resources.gold = Math.max(0, s.resources.gold - cost.gold);
     s.recruitCount++;
     const g = sys.generateGeneral(s);
+    s.eventEffects.goodRecruit = false;
     s.generals.push(g);
     return g;
   };
@@ -606,11 +609,11 @@ window.Game = window.Game || {};
     return g ? 1 + g.stats.leadership * MAP.LEADER_PER_LEADERSHIP : 1;
   };
 
-  // 戦力 = 兵数 × 鍛冶場 × 武将補正 × √全体倍率 × 家宝 × 当主特性 × 家訓
+  // 戦力 = 兵数 × 鍛冶場 × 武将補正 × √全体倍率 × 家宝 × 当主特性 × 家訓 × この代のイベントの補正
   sys.troopPower = function (s, troops, generalId) {
     return troops * sys.smithyMultiplier(s) * sys.leaderMultiplier(s, generalId) *
       Math.sqrt(sys.globalMultiplier(s)) * sys.heirloomEffect(s, 'power') * sys.traitEffect(s, 'power') *
-      sys.preceptPowerMultiplier(s);
+      sys.preceptPowerMultiplier(s) * s.genBuffs.power;
   };
 
   sys.unitPower = function (s, unit) {
@@ -754,10 +757,11 @@ window.Game = window.Game || {};
     return sys.enemyTroops(s, id) * sys.defenseMultiplier(s, id);
   };
 
-  // 自領の守備戦力 = 守備兵の戦力 × (1 + 城郭Lv × 0.2) × 城代の補正
+  // 自領の守備戦力 = 守備兵の戦力 × (1 + 城郭Lv × 0.2) × 城代の補正（本拠地は謀反への備えの補正も）
   sys.garrisonPower = function (s, id) {
     return sys.troopPower(s, sys.troopsAt(s, id), null) *
-      (1 + s.facilities.castle * INV.DEFENSE_PER_CASTLE_LEVEL) * sys.castellanMultiplier(s, id);
+      (1 + s.facilities.castle * INV.DEFENSE_PER_CASTLE_LEVEL) * sys.castellanMultiplier(s, id) *
+      (id === 'home' ? s.genBuffs.homeDefense : 1);
   };
 
   // 段階をまたいで城を探す
@@ -1001,12 +1005,10 @@ window.Game = window.Game || {};
     const castle = sys.castleData(s, b.castleId);
     if (units.length > 0 && sys.enemyTroops(s, b.castleId) <= 0) {
       const survivors = units.reduce(function (sum, u) { return sum + u.troops; }, 0);
-      const merit = castle.troops * BAT.MERIT_RATE;
       s.map.owned.push(b.castleId);
       if (s.map.won.indexOf(b.castleId) < 0) s.map.won.push(b.castleId);
       delete s.map.enemyTroops[b.castleId];
       s.map.garrisons[b.castleId] = survivors; // 残った兵はそのまま城の守備兵になる
-      s.resources.merit += merit;
       s.flags.firstVictory = true;
       s.stats.battlesWon++;
       // 遺徳：城を落とした分と、ボスなら別に加算
@@ -1020,7 +1022,7 @@ window.Game = window.Game || {};
       }
       sys.events.push({
         type: 'victory', name: castle.name, boss: !!castle.boss,
-        survivors: survivors, lost: lostOf(units), merit: merit, virtue: virtue,
+        survivors: survivors, lost: lostOf(units), virtue: virtue,
         income: castle.troops * BAT.TERRITORY_RICE_RATE * sys.resourceMultiplier(s, 'rice'),
         heirloom: heirloom,
       });
@@ -1049,10 +1051,8 @@ window.Game = window.Game || {};
     const name = sys.node(s, inv.from).name + 'の軍';
 
     if (inv.troops <= 0) {
-      const merit = inv.startTroops * INV.MERIT_RATE;
-      s.resources.merit += merit;
       const virtue = sys.gainVirtue(s, cfg.VIRTUE.DEFENSE_PER_STAGE); // 街道での迎撃も防衛の成功
-      sys.events.push({ type: 'fieldWin', name: name, lost: lostOf(units), merit: merit, virtue: virtue, defeated: inv.startTroops });
+      sys.events.push({ type: 'fieldWin', name: name, lost: lostOf(units), virtue: virtue, defeated: inv.startTroops });
       removeInvasion(s, inv.id);
       resume(); // 勝った部隊はそのまま目的地へ進む
       return false;
@@ -1077,11 +1077,9 @@ window.Game = window.Game || {};
     const name = sys.node(s, inv.from).name + 'の軍';
 
     if (inv.troops <= 0) {
-      const merit = inv.startTroops * INV.MERIT_RATE;
-      s.resources.merit += merit;
       const virtue = sys.gainVirtue(s, cfg.VIRTUE.DEFENSE_PER_STAGE);
       sys.events.push({
-        type: 'defenseWin', name: name, target: target.name, merit: merit, virtue: virtue,
+        type: 'defenseWin', name: name, target: target.name, virtue: virtue,
         lost: Math.max(0, (b.ownStart || 0) - sys.troopsAt(s, inv.to)), defeated: inv.startTroops,
       });
       removeInvasion(s, inv.id);
@@ -1315,13 +1313,15 @@ window.Game = window.Game || {};
     const cleared = s.map.stage;
     if (s.map.cleared.indexOf(cleared) < 0) s.map.cleared.push(cleared);
     if (cleared >= Game.data.STAGES.length) {
-      s.flags.unified = true; // 天下統一（エンディングはステップ5）
+      s.flags.unified = true;
+      s.ending = { time: s.stats.playTime, generations: s.generation, maxKokudaka: sys.maxKokudaka(s) };
       sys.events.push({ type: 'unified' });
       return;
     }
     resetMap(s);
     s.map.stage = cleared + 1;
     sys.events.push({ type: 'stageUp', cleared: cleared, stage: s.map.stage });
+    sys.queueStageEvents(s, s.map.stage);
   }
 
   // ---- 軍団長の自動進軍 ----
@@ -1500,7 +1500,7 @@ window.Game = window.Game || {};
 
   // 跡継ぎ候補の人数 = 基本 + 英才教育
   sys.heirCandidateCount = function (s) {
-    return LORD.HEIR_CANDIDATES + sys.preceptLevel(s, 'eisai') * PRE.eisai.heirCandidates;
+    return LORD.HEIR_CANDIDATES + sys.preceptLevel(s, 'eisai') * PRE.eisai.heirCandidates + s.eventEffects.heirExtra;
   };
 
   sys.rollTrait = function (exclude) {
@@ -1514,27 +1514,27 @@ window.Game = window.Game || {};
     return ids[0];
   };
 
-  // 格が1つ上がる確率 = min(0.6, 0.05 + 累計家格 × 0.005)
-  sys.gradeUpChance = function (prestige) {
+  // 格が1つ上がる確率 = min(0.6, 0.05 + 累計家格 × 0.005) ＋ 縁談の上乗せ（上限 0.95）
+  sys.gradeUpChance = function (prestige, bonus) {
     const G = cfg.TRAIT_GRADE;
-    return Math.min(G.UP_MAX, G.UP_BASE + prestige * G.UP_PER_PRESTIGE);
+    return Math.min(0.95, Math.min(G.UP_MAX, G.UP_BASE + prestige * G.UP_PER_PRESTIGE) + (bonus || 0));
   };
 
   // ★1から始めて、確率で1つずつ上がる（最大★5）
-  sys.rollGrade = function (prestige) {
+  sys.rollGrade = function (prestige, bonus) {
     let grade = 1;
-    const p = sys.gradeUpChance(prestige);
+    const p = sys.gradeUpChance(prestige, bonus);
     while (grade < cfg.TRAIT_GRADE.MAX && Math.random() < p) grade++;
     return grade;
   };
 
   // 跡継ぎの特性。累計家格が高いと2つ持つことがある
-  sys.rollTraits = function (prestige) {
+  sys.rollTraits = function (prestige, bonus) {
     const G = cfg.TRAIT_GRADE;
     const first = sys.rollTrait();
-    const traits = [{ id: first, grade: sys.rollGrade(prestige) }];
+    const traits = [{ id: first, grade: sys.rollGrade(prestige, bonus) }];
     if (prestige >= G.SECOND_MIN_PRESTIGE && Math.random() < G.SECOND_CHANCE) {
-      traits.push({ id: sys.rollTrait([first]), grade: sys.rollGrade(prestige) });
+      traits.push({ id: sys.rollTrait([first]), grade: sys.rollGrade(prestige, bonus) });
     }
     return traits;
   };
@@ -1543,7 +1543,7 @@ window.Game = window.Game || {};
     const names = Game.data.LORD_GIVEN_NAMES.filter(function (n) { return usedNames.indexOf(n) < 0; });
     const givenName = pick(names.length ? names : Game.data.LORD_GIVEN_NAMES);
     usedNames.push(givenName);
-    return { givenName: givenName, traits: sys.rollTraits(prestige), portrait: randInt(1, GEN.PORTRAIT_COUNT), age: 0 };
+    return { givenName: givenName, traits: sys.rollTraits(prestige, s.eventEffects.heirGradeUp), portrait: randInt(1, GEN.PORTRAIT_COUNT), age: 0 };
   }
 
   // 継承の手続きを始める（時間が止まり、継承画面が開く）
@@ -1602,7 +1602,7 @@ window.Game = window.Game || {};
   };
 
   // 継承を終えて次の代を始める
-  // リセット：米・金・兵・功績・施設・武将（譜代を除く）・領地（今の段階の地図）
+  // リセット：米・金・兵・施設・武将（譜代を除く）・領地（今の段階の地図）
   // 引き継ぎ：家格・家宝・譜代家臣・解放済みの段階（平定済みの段階を含む）・旧領の記録・歴代の記録
   sys.completeSuccession = function (s) {
     const sc = s.succession;
@@ -1644,7 +1644,10 @@ window.Game = window.Game || {};
     s.lord.peakGrowth = 0;
     s.succession = null;
 
-    s.resources = { rice: 0, gold: 0, troops: 0, merit: 0 };
+    s.resources = { rice: 0, gold: 0, troops: 0 };
+    s.eventEffects.heirGradeUp = 0; // 縁談の効果はこの継承で使い切る
+    s.eventEffects.heirExtra = 0;
+    s.genBuffs = { power: 1, homeDefense: 1 };
     s.kokudaka = 0;
     Object.keys(s.facilities).forEach(function (id) { s.facilities[id] = 0; });
     // 早熟型と検地が重なったら高い方
@@ -1705,7 +1708,7 @@ window.Game = window.Game || {};
     return plan;
   };
 
-  // 旧領を自領に戻す（功績・遺徳はなし。城郭は解放される）
+  // 旧領を自領に戻す（遺徳はなし。城郭は解放される）
   function takeFormerLand(s, id) {
     s.map.owned.push(id);
     s.map.garrisons[id] = 0; // 守備兵はいない。補充を送るまで守りは手薄
@@ -1729,9 +1732,165 @@ window.Game = window.Game || {};
     return plan.length;
   };
 
+  // ---- イベント（4.8）----
+  // 石高や段階の到達で、1周に一度だけ起きる。選択肢は2つ。選ぶまで時間を止める（継承の手続きと同じ）
+  const EV = cfg.EVENTS;
+
+  sys.isPaused = function (s) {
+    return !!s.succession || s.pendingEvents.length > 0;
+  };
+
+  function queueEvent(s, id) {
+    if (s.eventsDone.indexOf(id) >= 0 || s.pendingEvents.indexOf(id) >= 0) return;
+    s.pendingEvents.push(id);
+  }
+
+  // 石高で起きるイベント（毎ティック確かめる）
+  sys.checkEvents = function (s) {
+    if (s.kokudaka >= EV.merchant.kokudaka) queueEvent(s, 'merchant');
+  };
+
+  // その段階に入ったときに起きるイベント
+  sys.queueStageEvents = function (s, stage) {
+    Object.keys(EV).forEach(function (id) {
+      if (EV[id].stage === stage) queueEvent(s, id);
+    });
+  };
+
+  // 選択肢の説明（数値は config から作る）
+  sys.eventChoiceText = function (id, choice) {
+    const e = EV[id];
+    const pct = function (v) { return Math.round(v * 100) + '%'; };
+    switch (id + ':' + choice) {
+      case 'merchant:0': return '金 +' + e.gold;
+      case 'merchant:1': return '次の武将登用が必ず良将以上';
+      case 'marriage:0': return '次の継承で、跡継ぎ候補の特性の格が上がりやすい（格の上がる確率 +' + pct(e.gradeUp) + '）';
+      case 'marriage:1': return '次の継承で、跡継ぎ候補が ' + e.extraCandidates + '人増える';
+      case 'ikki:0': return '米 -' + pct(e.riceLoss) + '、遺徳 +' + e.virtuePerStage + '×段階';
+      case 'ikki:1': return '待機兵 -' + pct(e.troopLoss) + '、この代の戦力 +' + pct(e.power - 1);
+      case 'alliance:0': return '一番弱い勢力（ボスを除く）を戦わずに併合する（この代のみ。遺徳・旧領にはならない）';
+      case 'alliance:1': return '遺徳 +' + e.virtuePerStage + '×段階';
+      case 'rebellion:0': return 'この代の戦力 -' + pct(1 - e.power) + '、本拠地の守備戦力 ×' + e.homeDefense;
+      case 'rebellion:1': return pct(e.chance) + ' の確率で待機兵 -' + pct(e.troopLoss);
+    }
+    return '';
+  };
+
+  // 同盟で併合する勢力：今の地図で、まだ落としていない一番弱い城（ボスを除く）
+  function allianceTarget(s) {
+    let best = null;
+    sys.stageData(s).castles.forEach(function (c) {
+      if (c.boss || sys.isOwned(s, c.id) || sys.battleAt(s, c.id)) return;
+      if (!best || c.troops < best.troops) best = c;
+    });
+    return best;
+  }
+
+  // 先頭のイベントで choice（0 か 1）を選ぶ。結果の一文を返す
+  sys.resolveEvent = function (s, choice) {
+    const id = s.pendingEvents[0];
+    if (!id || (choice !== 0 && choice !== 1)) return null;
+    const e = EV[id];
+    const n = Game.format.num;
+    let result = '';
+    switch (id + ':' + choice) {
+      case 'merchant:0':
+        s.resources.gold += e.gold;
+        result = '金 +' + e.gold + ' を受け取った。';
+        break;
+      case 'merchant:1':
+        s.eventEffects.goodRecruit = true;
+        result = '次に登用する武将は、良将以上になる。';
+        break;
+      case 'marriage:0':
+        s.eventEffects.heirGradeUp = e.gradeUp;
+        result = '次の継承で、跡継ぎ候補の格が上がりやすくなる。';
+        break;
+      case 'marriage:1':
+        s.eventEffects.heirExtra = e.extraCandidates;
+        result = '次の継承で、跡継ぎ候補が ' + e.extraCandidates + '人増える。';
+        break;
+      case 'ikki:0': {
+        const rice = s.resources.rice * e.riceLoss;
+        s.resources.rice -= rice;
+        const v = sys.gainVirtue(s, e.virtuePerStage);
+        result = '米 ' + n(rice) + ' を配り、民の心をつかんだ。遺徳 +' + n(v);
+        break;
+      }
+      case 'ikki:1': {
+        const lost = s.resources.troops * e.troopLoss;
+        s.resources.troops -= lost;
+        s.genBuffs.power *= e.power;
+        result = '兵 ' + n(lost) + ' を失ったが、鎮圧で軍は鍛えられた。この代の戦力 ×' + e.power;
+        break;
+      }
+      case 'alliance:0': {
+        const c = allianceTarget(s);
+        if (c) {
+          s.map.owned.push(c.id);
+          s.map.garrisons[c.id] = 0;
+          delete s.map.enemyTroops[c.id];
+          s.flags.firstVictory = true;
+          result = c.name + ' を戦わずに併合した（この代のみ）。';
+        } else {
+          result = '併合できる勢力がなかった。';
+        }
+        break;
+      }
+      case 'alliance:1': {
+        const v = sys.gainVirtue(s, e.virtuePerStage);
+        result = '誘いを断り、家の誇りを守った。遺徳 +' + n(v);
+        break;
+      }
+      case 'rebellion:0':
+        s.genBuffs.power *= e.power;
+        s.genBuffs.homeDefense *= e.homeDefense;
+        result = '本拠地の守りを固めた。この代の戦力 ×' + e.power + '、本拠地の守備戦力 ×' + e.homeDefense;
+        break;
+      case 'rebellion:1':
+        if (Math.random() < e.chance) {
+          const lost = s.resources.troops * e.troopLoss;
+          s.resources.troops -= lost;
+          result = '噂は本当だった！ 謀反で待機兵 ' + n(lost) + ' を失った。';
+        } else {
+          result = 'ただの噂だった。何も起きなかった。';
+        }
+        break;
+    }
+    s.pendingEvents.shift();
+    s.eventsDone.push(id);
+    return result;
+  };
+
+  // ---- 天下統一と新たな周回 ----
+
+  // この周の最大石高（歴代と今の代）
+  sys.maxKokudaka = function (s) {
+    return s.lineage.reduce(function (m, r) { return Math.max(m, r.kokudaka); }, s.kokudaka);
+  };
+
+  // 新たな周回：家格・家宝・地図・歴代などをリセットして最初から。
+  // 引き継ぐのは家名・家訓・遺徳の残り・設定・周回の記録（家訓は周回をまたいで残る）
+  sys.newCycle = function (s) {
+    if (!s.flags.unified) return null;
+    const n = Game.state.create();
+    n.houseName = s.houseName;
+    n.precepts = Object.assign({}, s.precepts);
+    n.virtue = s.virtue;
+    n.settings = Object.assign({}, s.settings);
+    n.work.view = s.work.view;
+    n.cycle = s.cycle + 1;
+    n.cycles = s.cycles.concat([Object.assign({ cycle: s.cycle }, s.ending)]);
+    // 家訓の「代の開始時」の効果（検地・常備兵・名工の伝手）
+    n.facilities.field = sys.preceptStartField(n);
+    n.resources.troops = sys.standingArmy(n);
+    Game.work.newGeneration(n);
+    return n;
+  };
+
   // ---- 時間経過 ----
   sys.tick = function (s, dt) {
-    if (s.succession) return; // 継承の手続き中は時間を止める
+    if (sys.isPaused(s)) return; // 継承の手続き中・イベントを選ぶまでは時間を止める
     const r = sys.rates(s);
     sys.gainRice(s, r.rice * dt);
     s.resources.gold += r.gold * dt;
@@ -1743,6 +1902,7 @@ window.Game = window.Game || {};
 
     s.lord.age += dt;
     recordGrowth(s);
+    sys.checkEvents(s);
   };
 
   // 開発用：治世を隠居できる長さまで進める

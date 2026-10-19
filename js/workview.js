@@ -55,7 +55,7 @@ window.Game = window.Game || {};
   function frame(now) {
     requestAnimationFrame(frame);
     const s = cur();
-    if (!isVisible() || s.succession) {
+    if (!isVisible() || Game.systems.isPaused(s)) {
       work.displayed = null;
       hideField(s);
       lastFrame = now;
