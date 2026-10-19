@@ -18,12 +18,12 @@
 // 上手なプレイの真似方（1秒ごとに判断する）
 //   施設   ：城郭は買えるなら最優先（あと90秒で買えるなら貯める）。ほかは手持ちに対して一番安いものから
 //   武将   ：登用費が「金の毎秒生産 × 60」以下なら貯めて登用。統率が一番高い1人は部隊の大将、ほかは内政担当
-//   攻め   ：勝てる城のうち要る兵が一番少ない城へ、余裕をもって勝てる兵を送る（troopsToWin。損害は約3割）
+//   攻め   ：勝てる城のうち要る兵が一番少ない城へ、余裕をもって勝てる兵を送る（troopsToWin。戦力の比 約1.1倍、損害は約3割）
 //            本拠地から自領を通って向かう（補充してから攻めるのと同じ）。合戦中は突撃・鼓舞・伏兵を使えるたびに使う
 //   守り   ：本拠地以外が攻められたら、余裕をもって守りきれる兵になるまで本拠地から援軍を送る
 //   旧領   ：一括回復できるならすぐ回復
 //   家訓   ：遺徳があれば「コスト × 重み」が一番小さい家訓から習得（代の途中でも）
-//   隠居   ：「隠居の好機」が出ていて、攻められる城も出陣中の部隊もなく、最後の落城から90秒たち、
+//   隠居   ：隠居できる（治世120秒から）うえで「隠居の好機」（伸びの最大は治世120秒から測る）が出ていて、攻められる城も出陣中の部隊もなく、最後の落城から90秒たち、
 //            得る家格が今の累計の半分以上か伸びがほぼ止まったとき（ボスと合戦中は待つ）。maxReign で打ち切り
 //   跡継ぎ ：特性の価値（下の traitValue）が一番高い候補。譜代は政治の高い順
 (function () {
@@ -54,6 +54,7 @@
       'BATTLE.TERRITORY_RICE_RATE=0.002,FACILITIES.barracks.effect=0.1,FACILITIES.barracks.growth=1.22,FACILITIES.smithy.growth=1.5,' +
       'MILESTONE_MULT=1.5,FACILITIES.field.growth=1.2,FACILITIES.market.growth=1.2,PRESTIGE.EXPONENT=0.3',
     // A2：A に、段階1の敵を3倍強く・合戦の最低の長さを12秒にしたもの（案A＋段階1の調整）
+    // ※ 2026-10-19 に A2 を config.js / data.js に入れたので、今は preset なしが A2 と同じ
     A2: '@A,data.STAGES.0.castles.0.troops=30,data.STAGES.0.castles.1.troops=100,data.STAGES.0.castles.2.troops=300,' +
       'data.STAGES.0.castles.3.troops=1000,BATTLE.MIN_SIEGE_SECONDS=12',
     // B：数を減らした案（城郭・武将・領地・兵舎だけ）＋家格の指数 0.25
@@ -289,15 +290,13 @@
   }
 
   // 勝つのに要る兵（ランチェスターの二次法則）
-  // 敵の兵は「自軍戦力 × 0.2」ずつ、自軍の兵は「敵戦力 × 0.12」ずつ減る。
-  // 自軍が勝つのは 0.2 × 1人あたり戦力 × 自軍の兵² > 0.12 × 敵1人あたり戦力 × 敵の兵² のとき。
-  // 余裕 margin を掛けた分（2 なら損害は約3割）を送る。
-  // ※画面の「戦力」の比では勝敗が決まらない（1人あたりが強いほど、少ない兵で送ると負ける）
+  // 敵の兵は「自軍戦力 × 0.2 ÷ 敵1人あたり戦力」、自軍の兵は「敵戦力 × 0.12 ÷ 自軍1人あたり戦力」ずつ減る。
+  // つまり戦力どうしで削り合うので、自軍が勝つのは 0.2 × 自軍戦力² > 0.12 × 敵戦力² のとき（戦力の比 0.77 倍より上）。
+  // 余裕 margin を掛けた分（2 なら戦力の比 約1.1倍、損害は約3割）を送る。
   const WIN_MARGIN = 2;
   function troopsToWin(perTroop, enemyTroops, enemyPerTroop) {
-    const dealt = cfg.BATTLE.DEALT_RATE * perTroop;
-    const taken = cfg.BATTLE.TAKEN_RATE * enemyPerTroop;
-    return Math.ceil(enemyTroops * Math.sqrt(WIN_MARGIN * taken / dealt));
+    const ratio = Math.sqrt(WIN_MARGIN * cfg.BATTLE.TAKEN_RATE / cfg.BATTLE.DEALT_RATE); // 要る戦力の比
+    return Math.ceil(enemyTroops * enemyPerTroop * ratio / perTroop);
   }
 
   // ---- 攻め ----

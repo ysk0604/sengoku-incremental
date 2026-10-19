@@ -198,7 +198,7 @@ window.Game = window.Game || {};
     return v;
   };
 
-  // 城郭：全生産 ×1.25^Lv
+  // 城郭：全生産 ×effect^Lv
   sys.castleMultiplier = function (s) {
     return Math.pow(FAC.castle.effect, s.facilities.castle);
   };
@@ -831,6 +831,9 @@ window.Game = window.Game || {};
         enemy.max = inv.startTroops;
       }
     }
+    // 1人あたりの戦力（兵が0なら1として扱う。損害の計算で割るため）
+    own.perTroop = own.troops > 0 ? own.power / own.troops : 1;
+    enemy.perTroop = enemy.troops > 0 ? enemy.power / enemy.troops : 1;
     return { own: own, enemy: enemy };
   };
 
@@ -930,8 +933,10 @@ window.Game = window.Game || {};
     const rally = b.rallyLeft > 0;
     if (b.kind === 'defense') b.ownStart = Math.max(b.ownStart || 0, sides.own.troops);
 
-    const dealtRate = sides.own.power * BAT.DEALT_RATE * (charge ? BAT.CHARGE_DEALT : 1);
-    const takenRate = sides.enemy.power * BAT.TAKEN_RATE *
+    // 敵の損害 = 自軍戦力 × 0.2 ÷ 敵1人あたりの戦力、自軍の損害 = 敵戦力 × 0.12 ÷ 自軍1人あたりの戦力
+    // （戦力どうしで削り合うので、画面の「戦力」の比で勝ち負けが決まる。比が √(0.12÷0.2) ≒ 0.77 を超えれば勝つ）
+    const dealtRate = sides.own.power * BAT.DEALT_RATE / sides.enemy.perTroop * (charge ? BAT.CHARGE_DEALT : 1);
+    const takenRate = sides.enemy.power * BAT.TAKEN_RATE / sides.own.perTroop *
       (charge ? BAT.CHARGE_TAKEN : 1) * (rally ? BAT.RALLY_TAKEN : 1);
 
     // 最低の長さより早く決着しそうなら、与える損害と受ける損害を同じ割合で遅くする
@@ -1242,7 +1247,8 @@ window.Game = window.Game || {};
       if (u.state === 'returning' && u.pursuit > 0) {
         // 退却中は追撃を受ける（損害は半分）
         const d = Math.min(dt, u.pursuit);
-        u.troops = Math.max(0, u.troops - pursuitPower(s, u) * BAT.TAKEN_RATE * BAT.RETREAT_TAKEN * d);
+        u.troops = Math.max(0, u.troops - pursuitPower(s, u) * BAT.TAKEN_RATE * BAT.RETREAT_TAKEN * d /
+          sys.troopPower(s, 1, u.generalId));
         u.pursuit -= d;
         if (u.troops <= 0) return false; // 全滅
       }
@@ -1398,7 +1404,7 @@ window.Game = window.Game || {};
   };
 
   // ---- 領地 ----
-  // 自領（本拠地以外）と、平定済みの段階のすべての城が 米 +敵兵力×0.02/秒（その代のみ）
+  // 自領（本拠地以外）と、平定済みの段階のすべての城が 米 +敵兵力×TERRITORY_RICE_RATE/秒（その代のみ）
   sys.territoryRice = function (s) {
     let r = 0;
     s.map.owned.forEach(function (id) {
@@ -1443,7 +1449,7 @@ window.Game = window.Game || {};
     return !s.succession && s.lord.age >= LORD.RETIRE_AFTER;
   };
 
-  // 今隠居すると得る家格（小数のまま）= (その代の石高 ÷ 1000) ^ 0.5 × 老練型・名君の上乗せ × 家名の誉れ
+  // 今隠居すると得る家格（小数のまま）= (その代の石高 ÷ 1000) ^ 指数 × 老練型・名君の上乗せ × 家名の誉れ
   sys.prestigeGainRaw = function (s) {
     return Math.pow(s.kokudaka / cfg.PRESTIGE.DIVISOR, cfg.PRESTIGE.EXPONENT) * sys.traitEffect(s, 'prestige') *
       sys.preceptPrestigeMultiplier(s);
@@ -1465,10 +1471,15 @@ window.Game = window.Game || {};
     samples.push([s.lord.age, sys.prestigeGainRaw(s)]);
     // 窓より古い記録は、窓の始まりを測るための1つだけ残す
     while (samples.length > 2 && samples[1][0] <= s.lord.age - LORD.GROWTH_WINDOW) samples.shift();
-    if (s.lord.age >= LORD.GROWTH_WINDOW) {
+    if (s.lord.age >= sys.peakFrom()) {
       s.lord.peakGrowth = Math.max(s.lord.peakGrowth, sys.prestigeGrowth(s));
     }
   }
+
+  // 伸びの最大を測り始める治世の秒数（伸びの窓がたまるまでは測らない）
+  sys.peakFrom = function () {
+    return Math.max(LORD.GROWTH_WINDOW, LORD.PEAK_FROM);
+  };
 
   // 家格の伸び（1分あたり）= 窓の始まりから今までに増えた分を、1分あたりに直したもの
   sys.prestigeGrowth = function (s) {
@@ -1481,7 +1492,7 @@ window.Game = window.Game || {};
 
   // 伸びが最も大きかったときの半分を下回ったら「隠居の好機」（強制はしない）
   sys.isRetireChance = function (s) {
-    return sys.canRetire(s) && s.lord.age >= LORD.GROWTH_WINDOW && s.lord.peakGrowth > 0 &&
+    return sys.canRetire(s) && s.lord.age >= sys.peakFrom() && s.lord.peakGrowth > 0 &&
       sys.prestigeGrowth(s) < s.lord.peakGrowth * LORD.CHANCE_RATIO;
   };
 

@@ -59,10 +59,10 @@ Game.data = {
     {
       stage: 1, name: '国人衆期', region: '尾張の郡',
       castles: [
-        { id: 's1_nobushi', name: '野武士の砦', troops: 10 },
-        { id: 's1_dogou', name: '隣村の土豪', troops: 30 },
-        { id: 's1_kawazoi', name: '川沿いの国人', troops: 80 },
-        { id: 's1_hatagashira', name: '郡の旗頭', troops: 300, boss: true, heirloom: 'teaBowl' },
+        { id: 's1_nobushi', name: '野武士の砦', troops: 30 },
+        { id: 's1_dogou', name: '隣村の土豪', troops: 100 },
+        { id: 's1_kawazoi', name: '川沿いの国人', troops: 300 },
+        { id: 's1_hatagashira', name: '郡の旗頭', troops: 1000, boss: true, heirloom: 'teaBowl' },
       ],
       map: {
         positions: {

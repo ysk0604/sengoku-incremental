@@ -1370,7 +1370,7 @@ window.Game = window.Game || {};
     }
     setDisabled(els.retireButton, !sys.canRetire(s));
 
-    // 伸びが最大時の半分を下回ったら「隠居の好機」。60秒たつまでは、隠居できるまでの残りを出す
+    // 伸びが最大時の半分を下回ったら「隠居の好機」。隠居できるまでは、残りの秒数を出す
     const chance = sys.isRetireChance(s);
     setClass(els.retireButton, 'chance', chance);
     if (chance) {
