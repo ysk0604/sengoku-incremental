@@ -7,6 +7,8 @@ window.Game = window.Game || {};
   const fmt = Game.format;
   const sys = Game.systems;
 
+  const img = Game.images;
+
   const els = {};
   const facilityEls = {};
   const bulkEls = {};
@@ -131,9 +133,7 @@ window.Game = window.Game || {};
   function buildGeneralCard(s, g) {
     const card = make('div', 'general-card rarity-' + g.rarity);
 
-    const portrait = make('div', 'portrait', '肖像');
-    portrait.title = 'portrait_' + String(g.portrait).padStart(2, '0');
-    card.appendChild(portrait);
+    card.appendChild(portraitBox(g.portrait));
 
     const body = make('div', 'general-body');
     const head = make('div', 'general-head');
@@ -329,6 +329,10 @@ window.Game = window.Game || {};
     defs.appendChild(marker);
     root.appendChild(defs);
 
+    // 地図の絵（map_stageN.webp）。あれば一番下に敷き、仮の川と山は隠す
+    root.classList.remove('has-map-img');
+    root.appendChild(mapImageLayer(root, stage.stage));
+
     const decor = svg('g', {}, 'map-decor');
     m.rivers.forEach(function (d) { decor.appendChild(svg('path', { d: d }, 'river')); });
     m.mountains.forEach(function (p) {
@@ -396,6 +400,20 @@ window.Game = window.Game || {};
     setText(els.mapTitle, '段階' + fmt.kanji(stage.stage) + '　' + stage.name + '（' + stage.region + '）');
   }
 
+  function mapImageLayer(root, stage) {
+    const layer = svg('g', {}, 'map-bg');
+    const name = img.names.map(stage);
+    root.dataset.mapStage = String(stage);
+    img.load(name, function (ok) {
+      if (!ok || root.dataset.mapStage !== String(stage)) return; // 読み終わる前に別の段階の地図になった
+      layer.appendChild(svg('image', {
+        href: img.url(name), width: MAP_W, height: MAP_H, preserveAspectRatio: 'xMidYMid slice',
+      }));
+      root.classList.add('has-map-img');
+    });
+    return layer;
+  }
+
   // 平定済みの段階の地図を縮小して並べる
   function buildPacifiedMaps(s) {
     const box = els.pacifiedMaps;
@@ -406,6 +424,7 @@ window.Game = window.Game || {};
       const m = st.map;
       const item = make('div', 'pacified-item');
       const mini = svg('svg', { viewBox: '0 0 ' + MAP_W + ' ' + MAP_H }, 'pacified-svg');
+      mini.appendChild(mapImageLayer(mini, n));
       m.rivers.forEach(function (d) { mini.appendChild(svg('path', { d: d }, 'river')); });
       m.roads.forEach(function (r) {
         const a = m.positions[r[0]];
@@ -504,7 +523,7 @@ window.Game = window.Game || {};
     const g = svg('g', {}, cls);
     const x = left ? -58 : 0;
     g.appendChild(svg('line', { x1: 0, y1: 0, x2: 0, y2: -40 }, 'unit-pole'));
-    g.appendChild(svg('rect', { x: x, y: -40, width: 58, height: 22, rx: 2 }, 'unit-banner'));
+    g.appendChild(svg('rect', { x: x, y: -40, width: 58, height: 22, rx: 2 }, 'unit-banner' + (left ? ' left' : '')));
     const text = svg('text', { x: x + 29, y: -24 }, 'unit-text');
     g.appendChild(text);
     g.appendChild(svg('circle', { r: 5 }, 'unit-dot'));
@@ -705,13 +724,15 @@ window.Game = window.Game || {};
   ];
 
   const BATTLE_IMAGES = { siege: '合戦', defense: '防衛', field: '野戦' };
+  const BATTLE_FILES = { siege: 'battle_normal', defense: 'battle_defense', field: 'battle_field' };
 
   function buildBattleCard(s, b) {
     const boss = b.kind === 'siege' && !!sys.castleData(s, b.castleId).boss;
     const card = make('div', 'battle-card battle-' + b.kind + (boss ? ' boss' : ''));
 
     const head = make('div', 'battle-head');
-    head.appendChild(make('div', 'battle-image', boss ? '決戦' : BATTLE_IMAGES[b.kind]));
+    // 戦っている間、一枚絵が小さくゆれ、旗がなびく
+    head.appendChild(sceneBox('battle-image fighting', boss ? '決戦' : BATTLE_IMAGES[b.kind], boss ? 'battle_boss' : BATTLE_FILES[b.kind]));
     const title = make('div', 'battle-title');
     title.appendChild(make('div', 'battle-name', sys.battleTitle(s, b)));
     const buffs = make('div', 'battle-buffs');
@@ -831,19 +852,19 @@ window.Game = window.Game || {};
           const h = data.HEIRLOOMS.find(function (x) { return x.id === ev.heirloom; });
           lines.push(['家宝', h.name + '（' + h.desc + '）']);
         }
-        return { win: true, image: ev.boss ? '決戦' : '合戦', title: ev.name + ' を落とした！', lines: lines };
+        return { win: true, image: ev.boss ? '決戦' : '合戦', file: ev.boss ? 'battle_boss' : 'battle_normal', heirloom: ev.heirloom, title: ev.name + ' を落とした！', lines: lines };
       }
       case 'stageUp': {
         const next = data.STAGES[ev.stage - 1];
         const prev = data.STAGES[ev.cleared - 1];
-        return { win: true, image: '段階' + fmt.kanji(ev.stage), title: '段階' + fmt.kanji(ev.stage) + '「' + next.name + '」へ', lines: [
+        return { win: true, image: '段階' + fmt.kanji(ev.stage), file: 'result_stageup', title: '段階' + fmt.kanji(ev.stage) + '「' + next.name + '」へ', lines: [
           ['平定', prev.region + ' を平定した。その城はすべて領地として米を生む'],
           ['新しい地図', next.region + '（' + next.castles.length + '勢力）'],
           ['兵', '各城の守備兵と出陣中の兵は、本拠地の待機兵に戻った'],
         ] };
       }
       case 'recovered':
-        return { win: true, image: '旧領回復', title: '旧領を取り戻した！', lines: [
+        return { win: true, image: '旧領回復', file: 'result_recover', title: '旧領を取り戻した！', lines: [
           ['取り戻した城', ev.names.join('・')],
           ['使った兵', n(ev.cost) + ' 人'],
           ['守備兵', '0 人（補充を送るまで守りは手薄）'],
@@ -852,30 +873,30 @@ window.Game = window.Game || {};
       case 'unified':
         return null; // エンディングの画面を出す（updateEnding）
       case 'defeat':
-        return { win: false, image: ev.boss ? '決戦' : '合戦', title: ev.name + ' の攻略に失敗…', lines: [
+        return { win: false, image: ev.boss ? '決戦' : '合戦', file: 'battle_defeat', title: ev.name + ' の攻略に失敗…', lines: [
           ['損害', n(ev.lost) + ' 人（全滅）'],
           ['敵の残り', n(Math.ceil(ev.enemyLeft)) + ' 人（時間がたつと回復する）'],
         ] };
       case 'fieldWin':
-        return { win: true, image: '野戦', title: ev.name + ' を街道で撃退！', lines: [
+        return { win: true, image: '野戦', file: 'battle_field', title: ev.name + ' を街道で撃退！', lines: [
           ['撃退', '敵兵 ' + n(Math.ceil(ev.defeated)) + ' 人'],
           ['損害', n(ev.lost) + ' 人'],
           ['遺徳', '+' + n(ev.virtue)],
           ['部隊', '目的地へ進軍を続ける'],
         ] };
       case 'fieldLose':
-        return { win: false, image: '野戦', title: '野戦に敗れた…', lines: [
+        return { win: false, image: '野戦', file: 'battle_defeat', title: '野戦に敗れた…', lines: [
           ['損害', n(ev.lost) + ' 人（全滅）'],
           ['敵の残り', n(Math.ceil(ev.enemyLeft)) + ' 人が ' + ev.target + ' へ進軍を続ける'],
         ] };
       case 'defenseWin':
-        return { win: true, image: '防衛', title: ev.target + ' を守りきった！', lines: [
+        return { win: true, image: '防衛', file: 'battle_defense', title: ev.target + ' を守りきった！', lines: [
           ['撃退', '敵兵 ' + n(Math.ceil(ev.defeated)) + ' 人'],
           ['損害', n(ev.lost) + ' 人'],
           ['遺徳', '+' + n(ev.virtue)],
         ] };
       case 'defenseLose':
-        return { win: false, image: '防衛', title: ev.target + (ev.home ? ' が荒らされた…' : ' を奪われた…'), lines: ev.home ? [
+        return { win: false, image: '防衛', file: 'battle_defeat', title: ev.target + (ev.home ? ' が荒らされた…' : ' を奪われた…'), lines: ev.home ? [
           ['奪われた米', n(ev.loot.rice)],
           ['奪われた金', n(ev.loot.gold)],
           ['本拠地', '失わない'],
@@ -887,7 +908,11 @@ window.Game = window.Game || {};
   }
 
   function showResult(c) {
-    setText(els.resultImage, c.image);
+    // 一枚絵は作り直して、演出を最初から出す（勝ち：旗がなびく／負け：暗く沈む）
+    const old = els.resultImage;
+    els.resultImage = sceneBox('battle-image large scene-in ' + (c.win ? 'scene-win' : 'scene-lose'), c.image, c.file);
+    els.resultImage.id = 'result-image';
+    old.replaceWith(els.resultImage);
     setClass(els.resultModal.querySelector('.modal-box'), 'defeat', !c.win);
     setText(els.resultTitle, c.title);
     const body = els.resultBody;
@@ -898,7 +923,17 @@ window.Game = window.Game || {};
       row.appendChild(make('span', 'result-value', l[1]));
       body.appendChild(row);
     });
+    if (c.heirloom) body.appendChild(heirloomBadge(c.heirloom));
     setClass(els.resultModal, 'hidden', false);
+  }
+
+  // 手に入れた家宝の絵と名前（合戦結果に出す）
+  function heirloomBadge(id) {
+    const h = data.HEIRLOOMS.find(function (x) { return x.id === id; });
+    const box = make('div', 'heirloom-get');
+    box.appendChild(sceneBox('heirloom-icon large', '家宝', img.names.heirloom(id)));
+    box.appendChild(make('div', 'heirloom-get-name', '家宝「' + h.name + '」を手に入れた'));
+    return box;
   }
 
   // 結果は順番に1つずつ見せる（閉じたら次を出す）
@@ -1109,11 +1144,19 @@ window.Game = window.Game || {};
 
   let successionKey = null;
   let successionTree = null; // 継承画面の家訓（その手順のあいだだけ）
+  let successionShownStep = null; // 演出は手順が変わったときだけ出す（跡継ぎを選び直すたびには出さない）
 
   function portraitBox(portrait, cls) {
     const p = make('div', 'portrait' + (cls ? ' ' + cls : ''), '肖像');
-    p.title = 'portrait_' + String(portrait).padStart(2, '0');
+    img.fill(p, img.names.portrait(portrait));
     return p;
+  }
+
+  // 一枚絵の箱（画像がなければ文字の仮の表示）
+  function sceneBox(cls, text, name) {
+    const box = make('div', cls, text);
+    img.fill(box, name);
+    return box;
   }
 
   function stars(grade) {
@@ -1196,9 +1239,13 @@ window.Game = window.Game || {};
     const gained = sys.successionGain(s);
     const multNow = sys.prestigeMultiplier(s);
     const multNext = sys.prestigeMultiplierFor(s, s.prestige + gained);
+    const fresh = successionShownStep !== s.generation + ':' + sc.step;
+    successionShownStep = s.generation + ':' + sc.step;
+    setClass(body, 'fresh', fresh);
     body.appendChild(make('div', 'succession-step', stepLabel(sc.step)));
 
     if (sc.step === 'summary') {
+      body.appendChild(sceneBox('succession-scene', '隠居', 'succession_retire'));
       const head = make('div', 'succession-head');
       head.appendChild(portraitBox(s.lord.portrait, 'large'));
       const t = make('div', 'succession-title-box');
@@ -1239,6 +1286,7 @@ window.Game = window.Game || {};
       updatePreceptTree(s, successionTree);
       navButtons(body, 'summary', '跡継ぎを選ぶ', 'heir', false);
     } else if (sc.step === 'heir') {
+      body.appendChild(sceneBox('succession-scene short', '跡継ぎ選び', 'succession_heir'));
       body.appendChild(make('h2', 'succession-title', '跡継ぎを選ぶ'));
       body.appendChild(make('div', 'note', '格が上がる確率 ' +
         Math.round(sys.gradeUpChance(s.prestige + gained, s.eventEffects.heirGradeUp) * 100) + '%（累計家格が高いほど上がる）' +
@@ -1249,7 +1297,8 @@ window.Game = window.Game || {};
         const top = maxGrade(c.traits);
         const cls = 'heir-card' + (sc.chosen === i ? ' chosen' : '') +
           (top >= cfg.TRAIT_GRADE.HIGHLIGHT_FROM ? ' rare' : '') + (top >= cfg.TRAIT_GRADE.MAX ? ' legendary' : '');
-        const card = make('button', cls);
+        const card = make('button', cls + ' heir-in');
+        card.style.animationDelay = (i * 0.1) + 's'; // 候補を一人ずつ見せる
         card.appendChild(portraitBox(c.portrait));
         card.appendChild(make('div', 'heir-name', sys.lordFullName(s, c)));
         card.appendChild(traitBlock(c.traits));
@@ -1291,6 +1340,7 @@ window.Game = window.Game || {};
       navButtons(body, 'heir', '家督を譲る', 'ceremony', false);
     } else {
       const heir = sc.candidates[sc.chosen];
+      body.appendChild(sceneBox('succession-scene', '家督相続', 'succession_ceremony'));
       const row = make('div', 'ceremony');
       const prev = make('div', 'ceremony-person prev');
       prev.appendChild(portraitBox(s.lord.portrait, 'large'));
@@ -1422,8 +1472,12 @@ window.Game = window.Game || {};
       data.HEIRLOOMS.forEach(function (h) {
         const owned = sys.hasHeirloom(s, h.id);
         const item = make('div', 'heirloom-item' + (owned ? ' owned' : ''));
-        item.appendChild(make('div', 'heirloom-name', owned ? h.name : '？？？'));
-        item.appendChild(make('div', 'heirloom-desc', owned ? h.desc : '未入手（' + heirloomSource(h.id) + '）'));
+        // 未入手の家宝は絵を読み込まない（何の宝かは手に入れるまで伏せる）
+        item.appendChild(owned ? sceneBox('heirloom-icon', '宝', img.names.heirloom(h.id)) : make('div', 'heirloom-icon', '？'));
+        const text = make('div', 'heirloom-text');
+        text.appendChild(make('div', 'heirloom-name', owned ? h.name : '？？？'));
+        text.appendChild(make('div', 'heirloom-desc', owned ? h.desc : '未入手（' + heirloomSource(h.id) + '）'));
+        item.appendChild(text);
         hl.appendChild(item);
       });
     }
@@ -1548,8 +1602,15 @@ window.Game = window.Game || {};
 
   const eventUi = { id: null, result: null }; // 表示中のイベントと、選んだあとの結果の一文
 
+  // 騒ぎの出来事は一枚絵をゆらす
+  const SHAKY_EVENTS = { ikki: true, rebellion: true };
+
   function showEventChoices(s, id) {
     const d = data.EVENTS[id];
+    const pic = $('event-image');
+    img.fill(pic, img.names.event(id));
+    setClass(pic, 'shaky', !!SHAKY_EVENTS[id]);
+    replay(pic, 'scene-in'); // イベントが続けて来たときも、演出を最初から出す
     setText($('event-title'), d.title);
     setText($('event-text'), d.text);
     [0, 1].forEach(function (i) {
@@ -1619,6 +1680,7 @@ window.Game = window.Game || {};
     const e = s.ending;
     const show = !!e && s.flags.unified && !s.flags.endingSeen && !s.pendingEvents.length && !s.succession;
     setClass(els.endingModal, 'hidden', !show);
+    if (show) img.fill($('ending-image'), 'ending'); // 見せるときに初めて読み込む
     if (e) {
       setText($('ending-text'), s.houseName + 'は、' + (s.cycle > 1 ? fmt.kanji(s.cycle) + '度目の' : '') +
         '天下統一を成し遂げた。村ひとつの小領主から始まった家は、代を重ねて天下人となった。');
@@ -1725,6 +1787,46 @@ window.Game = window.Game || {};
     });
   }
 
+  // 城の絵（城郭のレベルで 砦→平城→天守→巨大城郭）。段階が上がった瞬間だけ演出を出す
+  const castleUi = { state: null, look: -1 };
+
+  function updateCastle(s) {
+    const look = sys.castleLook(s);
+    setText(els.castleLook, data.CASTLE_LOOKS[look]);
+    setText(els.castleLevel, '城郭 Lv' + s.facilities.castle);
+    if (castleUi.state === s && castleUi.look === look) return;
+    // 読み込み直後・データの入れ替え・継承で下がったときは演出を出さない
+    const up = castleUi.state === s && look > castleUi.look;
+    castleUi.state = s;
+    castleUi.look = look;
+    els.castleImage.dataset.look = String(look);
+    img.fill(els.castleImage, img.names.castle(look));
+    if (up) replay(els.castleImage, 'castle-up');
+  }
+
+  // 全体の背景（bg_main.webp。スマホの縦画面では bg_main_portrait.webp）
+  function loadBackground() {
+    const portrait = window.matchMedia('(orientation: portrait) and (max-width: 600px)');
+    const apply = function () {
+      const name = portrait.matches ? 'bg_main_portrait' : 'bg_main';
+      img.load(name, function (ok) {
+        const want = portrait.matches ? 'bg_main_portrait' : 'bg_main';
+        if (want !== name) return;
+        document.body.style.backgroundImage = ok ? 'url("' + img.url(name) + '")' : '';
+        setClass(document.body, 'has-bg', ok);
+      });
+    };
+    apply();
+    if (portrait.addEventListener) portrait.addEventListener('change', apply);
+  }
+
+  // CSS のアニメーションを最初から出し直す
+  function replay(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  }
+
   let stateRef = null;
 
   function update() {
@@ -1742,10 +1844,7 @@ window.Game = window.Game || {};
     const fushin = sys.preceptLevel(s, 'fushin') > 0;
     setClass(els.autoBuild, 'hidden', !fushin);
     if (fushin && els.autoBuildCheck.checked !== s.settings.autoBuild) els.autoBuildCheck.checked = s.settings.autoBuild;
-    const look = sys.castleLook(s);
-    setText(els.castleLook, data.CASTLE_LOOKS[look]);
-    setText(els.castleLevel, '城郭 Lv' + s.facilities.castle);
-    els.castleImage.dataset.look = String(look);
+    updateCastle(s);
     Object.keys(bulkEls).forEach(function (key) {
       setClass(bulkEls[key], 'active', s.settings.bulk === key);
     });
@@ -1832,6 +1931,7 @@ window.Game = window.Game || {};
     els.cycleBox = $('cycle-box');
     els.cycleRows = $('cycle-rows');
 
+    loadBackground();
     buildFacilities();
     buildBulkButtons();
     bindGenerals();

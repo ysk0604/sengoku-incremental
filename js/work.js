@@ -127,7 +127,7 @@ window.Game = window.Game || {};
   work.createField = function (s, kind) {
     const f = {
       kind: kind, items: [], drops: [], pops: [],
-      spawnTimer: 0, hitTimer: 0, strikeFlash: 0, nextId: 1,
+      spawnTimer: 0, hitTimer: 0, strikeFlash: 0, strikes: 0, nextId: 1, // strikes：打った回数（道具を振る動きに使う）
       cursor: { x: W.WIDTH / 2, y: W.HEIGHT / 2, inside: false },
       windowTime: 0, windowUnits: 0, // 手作業の稼ぎを1秒ごとに測る
     };
@@ -289,6 +289,7 @@ window.Game = window.Game || {};
     });
     if (f.kind === 'mine') descend(s, f);
     f.strikeFlash = 0.15;
+    f.strikes++;
   }
 
   // 跳ね終わった資源を加え、数字を出す

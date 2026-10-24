@@ -92,7 +92,7 @@
               <div id="work-status-mine" class="hidden"></div>
             </div>
             <div class="work-tool">
-              <div class="work-tool-head"><span id="work-tool-label" class="work-tool-label">鎌</span></div>
+              <div class="work-tool-head"><span id="work-tool-icon" class="work-tool-icon"></span><span id="work-tool-label" class="work-tool-label">鎌</span></div>
               <div id="work-tool-name" class="work-tool-name"></div>
               <button id="work-tool-buy" class="btn btn-small work-tool-buy"></button>
             </div>
@@ -110,8 +110,9 @@
               <input type="checkbox" id="auto-build-check"> 自動普請
             </label>
           </div>
-          <!-- 城の画像（ステップ6で画像に差し替え。今はダミー） -->
+          <!-- 城の画像（castle_0〜3.webp があれば差し替え。なければ文字の仮の表示） -->
           <div id="castle-image" class="castle-image" data-look="0">
+            <span class="castle-flag"></span>
             <span id="castle-look" class="castle-look">砦</span>
             <span id="castle-level" class="castle-level">城郭 Lv0</span>
           </div>
@@ -315,7 +316,7 @@
   <!-- イベント（選ぶまで時間が止まる） -->
   <div id="event-modal" class="modal event-modal hidden">
     <div class="modal-box event-box">
-      <div class="battle-image large event-image">出来事</div>
+      <div id="event-image" class="battle-image large event-image">出来事</div>
       <h2 id="event-title" class="result-title"></h2>
       <p id="event-text" class="event-text"></p>
       <div id="event-choices" class="event-choices">
@@ -332,8 +333,8 @@
   <!-- エンディング（天下統一） -->
   <div id="ending-modal" class="modal ending-modal hidden">
     <div class="modal-box ending-box">
-      <!-- ステップ6で ending.webp に差し替え -->
-      <div class="battle-image large ending-image">天下統一</div>
+      <!-- ending.webp があれば差し替え -->
+      <div id="ending-image" class="battle-image large ending-image">天下統一</div>
       <h2 class="ending-title">天下統一</h2>
       <p id="ending-text" class="ending-text"></p>
       <table class="ending-stats">
@@ -359,6 +360,7 @@
   <script src="js/config.js"></script>
   <script src="js/data.js"></script>
   <script src="js/format.js"></script>
+  <script src="js/images.js"></script>
   <script src="js/state.js"></script>
   <script src="js/systems.js"></script>
   <script src="js/work.js"></script>
