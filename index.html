@@ -262,6 +262,22 @@
             <textarea id="import-text" class="save-text" placeholder="書き出した文字列をここに貼り付けて「読み込む」を押してください（今の進行は上書きされます）"></textarea>
           </div>
         </div>
+        <h3 class="settings-heading">各代の石高ログ</h3>
+        <div class="note">この周の代ごとの石高と時間を、目標カーブ（目安）と比べます。目安との比が ×1 以上（▲）なら目安より速く、1/10 未満（▼）なら大きく遅れています。</div>
+        <div class="koku-log">
+          <svg id="koku-chart" class="koku-chart" viewBox="0 0 640 220" role="img" aria-label="代ごとの石高と目安のグラフ"></svg>
+          <table class="lineage-table koku-stage-table">
+            <thead><tr><th>段階に入る</th><th>入った代</th><th>目安の代</th><th>合計時間</th></tr></thead>
+            <tbody id="koku-stage-rows"></tbody>
+          </table>
+        </div>
+        <table class="lineage-table koku-table">
+          <thead>
+            <tr><th>代</th><th>当主</th><th>段階（目安）</th><th>その代の石高</th><th>目安の石高</th><th>目安との比</th><th>治世</th><th>合計時間</th></tr>
+          </thead>
+          <tbody id="koku-rows"></tbody>
+        </table>
+
         <div id="dev-tools" class="dev-tools hidden">
           <h3>開発用</h3>
           <div class="settings-row">

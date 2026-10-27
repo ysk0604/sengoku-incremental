@@ -38,6 +38,7 @@ button {
 
 /* ---- ヘッダー ---- */
 #header {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -60,8 +61,8 @@ button {
 .reign-line { display: flex; align-items: baseline; gap: 10px; margin: 3px 0 4px; font-size: 12px; white-space: nowrap; }
 .reign-text { font-variant-numeric: tabular-nums; }
 .growth-text { color: var(--gold); font-variant-numeric: tabular-nums; }
-.retire-line { display: flex; align-items: center; gap: 8px; }
-.retire-button { border-color: var(--vermilion-dark); color: var(--vermilion-dark); }
+.retire-line { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.retire-button { flex-shrink: 0; white-space: nowrap; border-color: var(--vermilion-dark); color: var(--vermilion-dark); }
 .retire-button:disabled { opacity: 0.55; }
 /* 隠居の好機：金色に光らせる（光の層の opacity だけを点滅させる） */
 .retire-button { position: relative; }
@@ -85,7 +86,8 @@ button {
 .retire-chance { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
 .retire-chance.is-chance { color: var(--gold); font-weight: bold; font-size: 12px; }
 .retire-chance.hidden { display: none; }
-.save-status { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+/* 自動保存の時刻は、出ても消えてもヘッダーの高さが変わらないよう、右下の余白に重ねて出す */
+.save-status { position: absolute; right: 20px; bottom: 3px; font-size: 10px; line-height: 1; color: var(--ink-soft); white-space: nowrap; pointer-events: none; }
 
 .header-kokudaka {
   display: flex;
@@ -874,6 +876,25 @@ button {
 .transfer-col { flex: 1; min-width: 0; }
 .save-text { width: 100%; height: 110px; resize: vertical; font-family: monospace; font-size: 11px;
   background: var(--paper-light); border: 1px solid var(--line); color: var(--ink); user-select: text; word-break: break-all; }
+
+/* 各代の石高ログ（グラフ・段階に入った代・代ごとの表） */
+.koku-log { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; margin: 10px 0; }
+.koku-chart { flex: 1 1 520px; min-width: 0; max-width: 640px; background: var(--paper-light); border: 1px solid var(--line); }
+.koku-stage-table { width: auto; flex-shrink: 0; }
+.koku-table td { font-variant-numeric: tabular-nums; }
+.koku-table td.koku-ahead { color: var(--gold); font-weight: bold; }
+.lineage-table td.koku-behind { color: var(--vermilion); }
+.koku-grid { stroke: var(--line); stroke-width: 1; }
+.koku-base { stroke: var(--ink-soft); stroke-width: 1; }
+.koku-stage-line { stroke: var(--gold); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.7; }
+.koku-axis { font-size: 11px; fill: var(--ink-soft); }
+.koku-axis-y { text-anchor: end; }
+.koku-axis-x { text-anchor: middle; }
+.koku-target { fill: none; stroke: var(--ink-soft); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.koku-target-dot { fill: var(--ink-soft); }
+.koku-actual { fill: none; stroke: var(--vermilion); stroke-width: 2; }
+.koku-actual-dot { fill: var(--vermilion); stroke: var(--paper-light); stroke-width: 1; }
+.koku-actual-dot.current { fill: var(--paper-light); stroke: var(--vermilion); stroke-width: 2; }
 /* 家訓の画面は縦に長いので、進む・閉じるボタンを下に貼り付けておく */
 .succession-box.wide .succession-nav { position: sticky; bottom: -22px; margin: 12px -28px -22px; padding: 10px 28px;
   background: var(--paper-light); border-top: 1px solid var(--line); }

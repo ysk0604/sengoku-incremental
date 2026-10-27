@@ -1320,6 +1320,7 @@ window.Game = window.Game || {};
     }
     resetMap(s);
     s.map.stage = cleared + 1;
+    s.stats.stageLog.push({ stage: s.map.stage, generation: s.generation, time: s.stats.playTime });
     sys.events.push({ type: 'stageUp', cleared: cleared, stage: s.map.stage });
     sys.queueStageEvents(s, s.map.stage);
   }
@@ -1617,6 +1618,8 @@ window.Game = window.Game || {};
       prestige: gained,
       seconds: s.lord.age,
       virtue: s.generationVirtue,
+      time: s.stats.playTime,
+      stage: s.map.stage,
     });
     s.prestige += gained;
     s.generationVirtue = 0;
@@ -1860,6 +1863,28 @@ window.Game = window.Game || {};
     s.pendingEvents.shift();
     s.eventsDone.push(id);
     return result;
+  };
+
+  // ---- 目標カーブ（設定タブの石高ログ用） ----
+
+  // その代の最大石高の目安。目安の点の間は対数で補い、外側は端の区間を延ばす
+  sys.targetKokudaka = function (gen) {
+    const pts = cfg.TARGET.KOKUDAKA;
+    let i = 0;
+    while (i < pts.length - 2 && gen > pts[i + 1][0]) i++;
+    const a = pts[i];
+    const b = pts[i + 1];
+    const t = (gen - a[0]) / (b[0] - a[0]);
+    return Math.pow(10, Math.log10(a[1]) + (Math.log10(b[1]) - Math.log10(a[1])) * t);
+  };
+
+  // その代の終わりに居たい段階の目安
+  sys.targetStage = function (gen) {
+    let stage = 1;
+    Object.keys(cfg.TARGET.STAGE_GEN).forEach(function (k) {
+      if (gen >= cfg.TARGET.STAGE_GEN[k]) stage = Math.max(stage, Number(k));
+    });
+    return stage;
   };
 
   // ---- 天下統一と新たな周回 ----

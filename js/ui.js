@@ -1711,6 +1711,151 @@ window.Game = window.Game || {};
     }
   }
 
+  // ---- 各代の石高ログ（設定タブ。目標カーブと比べる） ----
+  let kokuLogKey = null;
+
+  // 目安との比（×0.52・1/300 など）
+  function ratioText(r) {
+    if (!(r > 0)) return '—';
+    return r >= 0.01 ? fmt.mult(r) : '1/' + fmt.num(1 / r);
+  }
+
+  // 代ごとの記録（歴代＋治世中の今の代）。古いセーブで合計時間が無い代は、治世の合計で補う
+  function kokuLogRows(s) {
+    let total = 0;
+    const rows = s.lineage.map(function (r) {
+      total = r.time !== null ? r.time : total + r.seconds;
+      return { gen: r.generation, name: r.givenName, stage: r.stage, kokudaka: r.kokudaka, seconds: r.seconds, time: total, current: false };
+    });
+    rows.push({ gen: s.generation, name: s.lord.givenName, stage: s.map.stage, kokudaka: s.kokudaka,
+      seconds: s.lord.age, time: s.stats.playTime, current: true });
+    return rows;
+  }
+
+  function updateKokuLog(s) {
+    const key = [s.cycle, s.lineage.length, s.generation, s.map.stage, s.stats.stageLog.length, !!s.ending,
+      Math.floor(Math.log10(Math.max(1, s.kokudaka)) * 20), Math.floor(s.stats.playTime)].join(':');
+    if (key === kokuLogKey) return;
+    kokuLogKey = key;
+    const rows = kokuLogRows(s);
+
+    const tbody = els.kokuRows;
+    tbody.textContent = '';
+    rows.forEach(function (r) {
+      const target = sys.targetKokudaka(r.gen);
+      const ratio = r.kokudaka / target;
+      const goal = sys.targetStage(r.gen);
+      const tr = make('tr', r.current ? 'current' : '');
+      tr.appendChild(make('td', '', '第' + fmt.kanji(r.gen) + '代' + (r.current ? '（治世中）' : '')));
+      tr.appendChild(make('td', '', r.name));
+      tr.appendChild(make('td', r.stage !== null && r.stage < goal ? 'koku-behind' : '',
+        (r.stage !== null ? '段階' + r.stage : '—') + '（' + goal + '）'));
+      tr.appendChild(make('td', '', fmt.num(r.kokudaka)));
+      tr.appendChild(make('td', '', fmt.num(target)));
+      // 色だけに頼らないよう、目安以上は ▲、目安の 1/10 未満は ▼ を付ける（治世中の代は途中なので付けない）
+      const mark = r.current ? '' : ratio >= 1 ? 'ahead' : ratio < 0.1 ? 'behind' : '';
+      tr.appendChild(make('td', mark ? 'koku-' + mark : '',
+        (mark === 'ahead' ? '▲' : mark === 'behind' ? '▼' : '') + ratioText(ratio)));
+      tr.appendChild(make('td', '', formatSeconds(r.seconds)));
+      tr.appendChild(make('td', '', formatLong(r.time)));
+      tbody.appendChild(tr);
+    });
+
+    // 段階に入った代と時間
+    const sb = els.kokuStageRows;
+    sb.textContent = '';
+    Object.keys(cfg.TARGET.STAGE_GEN).forEach(function (k) {
+      const stage = Number(k);
+      const hit = s.stats.stageLog.find(function (e) { return e.stage === stage; });
+      const reached = stage <= s.map.stage || s.flags.unified;
+      const tr = make('tr');
+      tr.appendChild(make('td', '', '段階' + stage + ' ' + data.STAGES[stage - 1].name));
+      tr.appendChild(make('td', hit && hit.generation > cfg.TARGET.STAGE_GEN[k] ? 'koku-behind' : '',
+        hit ? '第' + fmt.kanji(hit.generation) + '代' : reached ? '（記録なし）' : '—'));
+      tr.appendChild(make('td', '', '第' + fmt.kanji(cfg.TARGET.STAGE_GEN[k]) + '代'));
+      tr.appendChild(make('td', '', hit ? formatLong(hit.time) : '—'));
+      sb.appendChild(tr);
+    });
+    const ug = cfg.TARGET.UNIFY_GEN;
+    const um = cfg.TARGET.UNIFY_MINUTES;
+    const tr = make('tr');
+    const e = s.ending;
+    tr.appendChild(make('td', '', '天下統一'));
+    tr.appendChild(make('td', e && e.generations > ug[1] ? 'koku-behind' : '', e ? '第' + fmt.kanji(e.generations) + '代' : '—'));
+    tr.appendChild(make('td', '', fmt.kanji(ug[0]) + '〜' + fmt.kanji(ug[1]) + '代'));
+    tr.appendChild(make('td', e && e.time > um[1] * 60 ? 'koku-behind' : '',
+      (e ? formatLong(e.time) : '—') + '（目安 ' + um[0] / 60 + '〜' + um[1] / 60 + '時間）'));
+    sb.appendChild(tr);
+
+    drawKokuChart(s, rows);
+  }
+
+  // 石高のグラフ（横：代、縦：石高の桁）。点線が目安、朱の線が実際
+  function drawKokuChart(s, rows) {
+    const chart = els.kokuChart;
+    chart.textContent = '';
+    const L = 54, R = 630, T = 12, B = 192;
+    const maxGen = Math.max(15, s.generation);
+    const yMin = 3, yMax = 17;
+    const x = function (g) { return L + (g - 1) / (maxGen - 1) * (R - L); };
+    const y = function (v) {
+      const lv = Math.min(yMax, Math.max(yMin, Math.log10(Math.max(1, v))));
+      return B - (lv - yMin) / (yMax - yMin) * (B - T);
+    };
+
+    // 目盛り（万・億・兆・京）と、段階に入る目安の代
+    [[4, '1万'], [8, '1億'], [12, '1兆'], [16, '1京']].forEach(function (t) {
+      const ty = y(Math.pow(10, t[0]));
+      chart.appendChild(svg('line', { x1: L, y1: ty, x2: R, y2: ty }, 'koku-grid'));
+      const label = svg('text', { x: L - 6, y: ty + 4 }, 'koku-axis koku-axis-y');
+      label.textContent = t[1];
+      chart.appendChild(label);
+    });
+    Object.keys(cfg.TARGET.STAGE_GEN).forEach(function (k) {
+      const gx = x(cfg.TARGET.STAGE_GEN[k]);
+      chart.appendChild(svg('line', { x1: gx, y1: T, x2: gx, y2: B }, 'koku-stage-line'));
+      const label = svg('text', { x: gx + 3, y: T + 10 }, 'koku-axis');
+      label.textContent = '段階' + k;
+      chart.appendChild(label);
+    });
+    for (let g = 1; g <= maxGen; g++) {
+      if (g !== 1 && g % (maxGen > 30 ? 5 : 1) !== 0) continue;
+      const label = svg('text', { x: x(g), y: B + 16 }, 'koku-axis koku-axis-x');
+      label.textContent = g;
+      chart.appendChild(label);
+    }
+    chart.appendChild(svg('line', { x1: L, y1: B, x2: R, y2: B }, 'koku-base'));
+
+    // 目安
+    const tp = [];
+    for (let g = 1; g <= maxGen; g++) tp.push(x(g).toFixed(1) + ',' + y(sys.targetKokudaka(g)).toFixed(1));
+    chart.appendChild(svg('polyline', { points: tp.join(' ') }, 'koku-target'));
+    cfg.TARGET.KOKUDAKA.forEach(function (p) {
+      chart.appendChild(svg('circle', { cx: x(p[0]), cy: y(p[1]), r: 3 }, 'koku-target-dot'));
+    });
+
+    // 実際
+    chart.appendChild(svg('polyline', { points: rows.map(function (r) {
+      return x(r.gen).toFixed(1) + ',' + y(r.kokudaka).toFixed(1);
+    }).join(' ') }, 'koku-actual'));
+    rows.forEach(function (r) {
+      chart.appendChild(svg('circle', { cx: x(r.gen), cy: y(r.kokudaka), r: r.current ? 4.5 : 3.5 },
+        'koku-actual-dot' + (r.current ? ' current' : '')));
+    });
+
+    // 凡例
+    const lg = svg('g', { transform: 'translate(' + (R - 150) + ',' + (B - 34) + ')' });
+    lg.appendChild(svg('line', { x1: 0, y1: 0, x2: 22, y2: 0 }, 'koku-actual'));
+    const t1 = svg('text', { x: 28, y: 4 }, 'koku-axis');
+    t1.textContent = '実際（○は治世中）';
+    lg.appendChild(t1);
+    lg.appendChild(svg('line', { x1: 0, y1: 16, x2: 22, y2: 16 }, 'koku-target'));
+    const t2 = svg('text', { x: 28, y: 20 }, 'koku-axis');
+    t2.textContent = '目安';
+    lg.appendChild(t2);
+    chart.appendChild(lg);
+  }
+
   // ---- 開発用の速度倍率 ----
   const devSpeedEls = {};
 
@@ -1842,6 +1987,7 @@ window.Game = window.Game || {};
       lineageKey = null;
       successionKey = null;
       cyclesKey = null;
+      kokuLogKey = null;
       eventUi.id = null;
       eventUi.result = null;
     }
@@ -1862,12 +2008,16 @@ window.Game = window.Game || {};
     updateSuccession(s);
     updateEvent(s);
     updateEnding(s);
+    updateKokuLog(s);
     updateDevSpeed();
   }
 
   function init() {
     els.houseTitle = $('house-title');
     els.saveStatus = $('save-status');
+    els.kokuRows = $('koku-rows');
+    els.kokuStageRows = $('koku-stage-rows');
+    els.kokuChart = $('koku-chart');
     els.kokudaka = $('kokudaka-value');
     els.res = { rice: $('res-rice'), gold: $('res-gold'), troops: $('res-troops') };
     els.rate = { rice: $('rate-rice'), gold: $('rate-gold'), troops: $('rate-troops') };

@@ -76,7 +76,7 @@ window.Game = window.Game || {};
       battles: [],       // 進行中の合戦（攻城戦・防衛戦・野戦。采配の効果時間・クールダウン）
       flags: { firstVictory: false, unified: false, endingSeen: false },
       settings: { bulk: cfg.DEFAULT_BULK, autoBuild: true }, // autoBuild：自動普請のON/OFF
-      stats: { playTime: 0, battlesWon: 0 },
+      stats: { playTime: 0, battlesWon: 0, stageLog: [] }, // stageLog：この周で段階に入った代と時間 [{ stage, generation, time }]
     };
   }
 
@@ -322,6 +322,8 @@ window.Game = window.Game || {};
         prestige: isNum(r.prestige) ? r.prestige : 0,
         seconds: isNum(r.seconds) ? r.seconds : 0,
         virtue: isNum(r.virtue) ? r.virtue : 0,
+        time: isNum(r.time) ? r.time : null,                     // 隠居したときの合計プレイ時間（古いセーブには無い）
+        stage: Number.isInteger(r.stage) ? r.stage : null,       // 隠居したときの段階（古いセーブには無い）
       };
     });
     const sc = raw.succession;
@@ -390,6 +392,9 @@ window.Game = window.Game || {};
     s.ending = s.flags.unified ? record(raw.ending) || { time: s.stats.playTime, generations: s.generation, maxKokudaka: s.kokudaka } : null;
     s.cycles = (Array.isArray(raw.cycles) ? raw.cycles : []).map(record).filter(function (r) { return r; });
     s.cycle = Number.isInteger(s.cycle) && s.cycle >= 1 ? s.cycle : 1;
+    s.stats.stageLog = (Array.isArray(s.stats.stageLog) ? s.stats.stageLog : []).filter(function (r) {
+      return r && typeof r === 'object' && Number.isInteger(r.stage) && Number.isInteger(r.generation) && isNum(r.time);
+    }).map(function (r) { return { stage: r.stage, generation: r.generation, time: r.time }; });
   }
 
   // 読み込んだ JSON をゲーム状態にする（古い形式・壊れた値はここで直す）
