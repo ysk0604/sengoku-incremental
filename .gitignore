@@ -1,0 +1,16 @@
+# GitHub に上げないもの
+# （画面の写し・作業用のメモは、このフォルダの外の作業用フォルダに置いているので、もともと入らない）
+
+# Claude Code の個人設定
+.claude/
+
+# 作業用のファイル（もしこのフォルダに置いたときのため）
+/scratch/
+/screenshots/
+*.tmp
+*.log
+
+# OS が作るファイル
+Thumbs.db
+desktop.ini
+.DS_Store

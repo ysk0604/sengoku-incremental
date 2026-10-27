@@ -560,6 +560,11 @@ assets/IMAGE_LIST.md … 必要な画像の一覧（ファイル名・大きさ�
 ### ステップ9：Web公開
 - itch.io（または GitHub Pages）に無料で公開するための手順書（PUBLISH.md）を作る。公開用のファイルだけをまとめる手順も含める（tools/ や開発用ボタンは含めない。DEV_TOOLS は false にする）
 - 完了条件：公開したURLを、PCとスマホのブラウザで開いて遊べる
+- 実装（2026-10-27）：公開先は GitHub Pages（無料・PWA が動く）。リポジトリは Public。main ブランチの docs/ を公開する
+  - docs/ は tools/build_public.sh で作る（index.html・manifest・sw.js・css・js・assets/img・assets/icon だけ。DEV_TOOLS を false に、sw.js の CACHE を作った日時に変える。sw.js の一覧とファイルが合っているかも確かめる）
+  - tools/・GAME_SPEC.md・PUBLISH.md はリポジトリには入るが、公開URLには出さない。.gitignore で Claude Code の個人設定などを外す
+  - コミットの作者のメールアドレスは、GitHub の noreply アドレスにしてから上げる
+  - 手順書は PUBLISH.md（アカウント作成・上げる・Pages の設定・スマホでの確認・更新のしかた・有料の案内を選ばないこと）
 
 ### ステップ10：PC用 .exe と Android 用 APK
 - Tauri で Windows 用の .exe を作る手順と設定を用意する（必要なツールのインストールから順に）

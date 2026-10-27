@@ -8,7 +8,7 @@ Game.config = {
   DEV_SPEED: 1,             // 開発用の速度倍率の初期値（設定タブの開発用ボタンで切り替える。セーブしない）
   DEV_SPEEDS: [1, 10, 100], // 切り替えられる速度倍率
   STEP_SECONDS: 0.1,        // 速度倍率を上げたときも、1回に進めるのはこの秒数まで（合戦の計算が粗くならないように）
-  DEV_TOOLS: true,          // 設定タブに開発用ボタンを表示する（公開時は false）
+  DEV_TOOLS: true,          // 設定タブに開発用ボタンを表示する（公開用の docs/ では tools/build_public.sh が false にする）
 
   // ---- セーブ ----
   SAVE_KEY: 'sengoku_incremental_save_v1',
