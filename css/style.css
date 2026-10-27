@@ -3,10 +3,11 @@
   --paper-dark: #e7dcc4;
   --paper-light: #faf6ec;
   --ink: #2a2622;          /* 墨 */
-  --ink-soft: #6b6157;
+  --ink-soft: #554b41;      /* 補足の文字。和紙の地とのコントラスト 7:1 ほど */
   --vermilion: #c0392b;    /* 朱 */
   --vermilion-dark: #962d22;
   --gold: #b8892b;         /* 金 */
+  --gold-ink: #8a641a;     /* 金色の文字（--gold のままだと地との差が小さく読みにくい） */
   --line: #cbbb9c;
   --font: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro", serif;
 }
@@ -52,7 +53,7 @@ button {
 .house-line { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
 .house-title { font-size: 17px; font-weight: bold; letter-spacing: 0.05em; }
 .lord-trait {
-  font-size: 11px;
+  font-size: 12px;
   padding: 1px 6px;
   background: var(--gold);
   color: var(--paper-light);
@@ -60,10 +61,10 @@ button {
 .lord-trait.hidden { display: none; }
 .reign-line { display: flex; align-items: baseline; gap: 10px; margin: 3px 0 4px; font-size: 12px; white-space: nowrap; }
 .reign-text { font-variant-numeric: tabular-nums; }
-.growth-text { color: var(--gold); font-variant-numeric: tabular-nums; }
+.growth-text { color: var(--gold-ink); font-variant-numeric: tabular-nums; }
 .retire-line { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .retire-button { flex-shrink: 0; white-space: nowrap; border-color: var(--vermilion-dark); color: var(--vermilion-dark); }
-.retire-button:disabled { opacity: 0.55; }
+.retire-button:disabled { border-color: var(--ink-soft); }
 /* 隠居の好機：金色に光らせる（光の層の opacity だけを点滅させる） */
 .retire-button { position: relative; }
 .retire-button.chance {
@@ -83,8 +84,8 @@ button {
   from { opacity: 0.2; }
   to { opacity: 1; }
 }
-.retire-chance { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
-.retire-chance.is-chance { color: var(--gold); font-weight: bold; font-size: 12px; }
+.retire-chance { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.retire-chance.is-chance { color: var(--gold-ink); font-weight: bold; font-size: 12px; }
 .retire-chance.hidden { display: none; }
 /* 自動保存の時刻は、出ても消えてもヘッダーの高さが変わらないよう、右下の余白に重ねて出す */
 .save-status { position: absolute; right: 20px; bottom: 3px; font-size: 10px; line-height: 1; color: var(--ink-soft); white-space: nowrap; pointer-events: none; }
@@ -120,11 +121,11 @@ button {
   flex-direction: column;
   min-width: 64px;
 }
-.res[data-res="prestige"] .res-value { color: var(--gold); }
-.res[data-res="virtue"] .res-value { color: var(--gold); }
-.res-name { font-size: 12px; color: var(--ink-soft); }
+.res[data-res="prestige"] .res-value { color: var(--gold-ink); }
+.res[data-res="virtue"] .res-value { color: var(--gold-ink); }
+.res-name { font-size: 13px; color: var(--ink-soft); }
 .res-value { font-size: 20px; font-weight: bold; font-variant-numeric: tabular-nums; }
-.res-rate { font-size: 12px; color: var(--gold); height: 15px; }
+.res-rate { font-size: 12px; color: var(--gold-ink); height: 15px; }
 .res[data-res="power"] .res-value { color: var(--vermilion-dark); }
 
 /* ---- レイアウト ---- */
@@ -179,7 +180,8 @@ button {
   font-size: 14px;
 }
 .btn:hover:not(:disabled) { background: #fff; }
-.btn:disabled { opacity: 0.4; cursor: default; }
+/* 押せないボタンは薄くせず、点線の枠と灰色の文字で示す */
+.btn:disabled { cursor: default; color: var(--ink-soft); border-style: dashed; border-color: var(--ink-soft); background: transparent; }
 .btn-danger { border-color: var(--vermilion); color: var(--vermilion); }
 
 /* ---- 内政 ---- */
@@ -254,9 +256,9 @@ button {
 .facility-head { display: flex; align-items: baseline; gap: 12px; }
 .facility-name { font-size: 18px; font-weight: bold; }
 .facility-level { font-size: 15px; color: var(--vermilion-dark); }
-.facility-desc { font-size: 12px; color: var(--ink-soft); margin: 2px 0 4px; }
+.facility-desc { font-size: 13px; color: var(--ink-soft); margin: 2px 0 4px; }
 .facility-effect { font-size: 14px; }
-.facility-milestone { font-size: 12px; color: var(--gold); min-height: 15px; }
+.facility-milestone { font-size: 12px; color: var(--gold-ink); min-height: 15px; }
 
 .facility-action {
   width: 220px;
@@ -271,9 +273,10 @@ button {
 .build-button { min-width: 110px; }
 
 .facility-lock { display: none; }
-.facility.locked { border-left-color: var(--line); }
+/* 未解放の施設は薄くしすぎず、灰色の地と点線の枠で示す */
+.facility.locked { border-left-color: var(--line); border-style: dashed; border-left-style: solid; background: #ece4d3; }
 .facility.locked > .facility-info,
-.facility.locked > .facility-action { opacity: 0.25; }
+.facility.locked > .facility-action { opacity: 0.75; }
 .facility.locked .facility-lock {
   display: block;
   position: absolute;
@@ -315,7 +318,7 @@ button {
 .recruit-cost.short { color: var(--vermilion); }
 
 .generals-summary { font-size: 15px; line-height: 1.8; }
-.domestic-mult { font-size: 20px; font-weight: bold; color: var(--gold); margin: 0 6px; }
+.domestic-mult { font-size: 20px; font-weight: bold; color: var(--gold-ink); margin: 0 6px; }
 
 .general-list {
   display: grid;
@@ -359,7 +362,7 @@ button {
 .general-name { font-size: 17px; font-weight: bold; }
 .epithet { font-size: 13px; color: var(--vermilion-dark); }
 .rarity-badge {
-  font-size: 11px;
+  font-size: 12px;
   padding: 1px 6px;
   border: 1px solid var(--ink-soft);
   color: var(--ink-soft);
@@ -370,12 +373,12 @@ button {
 .general-stats { display: flex; gap: 12px; margin: 6px 0; font-size: 13px; }
 .stat-name { color: var(--ink-soft); margin-right: 3px; }
 .stat-value { font-weight: bold; font-variant-numeric: tabular-nums; }
-.stat-key .stat-value { color: var(--gold); }
+.stat-key .stat-value { color: var(--gold-ink); }
 
 .assign-buttons { display: flex; }
 .assign-button { font-size: 13px; padding: 3px 10px; margin-right: -1px; }
 .assign-button.active { background: var(--ink); color: var(--paper-light); }
-.general-effect { font-size: 12px; color: var(--gold); min-height: 15px; margin-top: 4px; }
+.general-effect { font-size: 13px; color: var(--gold-ink); min-height: 15px; margin-top: 4px; }
 .general-option { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; }
 .general-option-label { color: var(--ink-soft); flex-shrink: 0; }
 .general-select {
@@ -414,7 +417,7 @@ button {
 }
 .map-title { font-size: 18px; font-weight: bold; letter-spacing: 0.1em; }
 .map-hint { font-size: 14px; color: var(--vermilion-dark); }
-.heirloom-line { margin-left: auto; font-size: 13px; color: var(--gold); font-weight: bold; }
+.heirloom-line { margin-left: auto; font-size: 13px; color: var(--gold-ink); font-weight: bold; }
 
 .pacified-maps { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
 .pacified-maps.hidden, .far-powers.hidden { display: none; }
@@ -513,14 +516,14 @@ button {
   margin-top: 10px;
   padding: 8px 12px;
   background: #3a3530;
-  color: #cfc6b4;
-  font-size: 12px;
+  color: #e2dacb;
+  font-size: 13px;
   line-height: 1.9;
 }
 .far-row { display: flex; gap: 12px; }
-.far-stage { flex-shrink: 0; width: 120px; color: #9d9381; }
+.far-stage { flex-shrink: 0; width: 120px; color: #cfc4ad; }
 .far-list { display: flex; flex-wrap: wrap; gap: 4px 14px; }
-.far-item.boss .far-name { color: #d9a25a; }
+.far-item.boss .far-name { color: #f0b860; font-weight: bold; }
 .far-troops { margin-left: 4px; color: #e7dcc4; font-weight: bold; }
 
 .map-side {
@@ -774,15 +777,15 @@ button {
 .ceremony-person { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .ceremony-person.prev { opacity: 0.6; }
 .ceremony-caption { font-size: 13px; }
-.ceremony-arrow { font-size: 28px; color: var(--gold); }
+.ceremony-arrow { font-size: 28px; color: var(--gold-ink); }
 .ceremony-title { text-align: center; margin: 4px 0; font-size: 24px; letter-spacing: 0.15em; color: var(--vermilion-dark); }
-.ceremony-prestige { text-align: center; font-size: 16px; color: var(--gold); font-weight: bold; }
+.ceremony-prestige { text-align: center; font-size: 16px; color: var(--gold-ink); font-weight: bold; }
 
 /* 特性の格 */
 .trait-block { display: flex; flex-direction: column; gap: 4px; width: 100%; }
 .trait-row { padding: 3px 4px; border-top: 1px dotted var(--line); }
-.trait-stars { color: var(--gold); letter-spacing: -1px; }
-.trait-grade-name { font-size: 11px; margin-left: 4px; padding: 0 4px; border: 1px solid var(--gold); color: var(--gold); }
+.trait-stars { color: var(--gold-ink); letter-spacing: -1px; }
+.trait-grade-name { font-size: 12px; margin-left: 4px; padding: 0 4px; border: 1px solid var(--gold); color: var(--gold-ink); }
 .trait-row.grade-4 .trait-grade-name, .trait-row.grade-5 .trait-grade-name { background: var(--gold); color: var(--paper-light); }
 .heir-card.rare { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(184, 137, 43, 0.45); }
 .heir-card.legendary { background: #fff7e3; box-shadow: 0 0 0 3px var(--vermilion), 0 0 18px rgba(192, 57, 43, 0.4); }
@@ -807,7 +810,7 @@ button {
 .retainer-card:disabled { opacity: 0.45; cursor: default; }
 .retainer-head { display: flex; align-items: baseline; gap: 6px; }
 .retainer-stats { font-size: 12px; color: var(--ink-soft); margin-top: 3px; }
-.fudai-badge { font-size: 11px; padding: 1px 6px; background: var(--ink); color: var(--paper-light); }
+.fudai-badge { font-size: 12px; padding: 1px 6px; background: var(--ink); color: var(--paper-light); }
 
 /* 旧領 */
 .node.former .node-body { stroke: var(--gold); stroke-dasharray: 5 3; stroke-width: 3; }
@@ -821,7 +824,7 @@ button {
 .lineage-top { display: flex; gap: 32px; flex-wrap: wrap; }
 .lineage-stat { display: flex; align-items: baseline; gap: 8px; }
 .lineage-stat .label { font-size: 13px; color: var(--ink-soft); }
-.lineage-big { font-size: 24px; font-weight: bold; color: var(--gold); }
+.lineage-big { font-size: 24px; font-weight: bold; color: var(--gold-ink); }
 .lineage-table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--paper-light); }
 .lineage-table th, .lineage-table td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 .lineage-table th { font-size: 12px; color: var(--ink-soft); font-weight: normal; background: var(--paper-dark); }
@@ -851,20 +854,34 @@ button {
 .succession-box.wide { width: 980px; max-height: calc(100vh - 32px); overflow-y: auto; }
 .succession-precepts { margin: 8px 0; }
 .precept-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
-.precept-virtue { font-size: 18px; font-weight: bold; color: var(--gold); white-space: nowrap; }
+.precept-virtue { font-size: 18px; font-weight: bold; color: var(--gold-ink); white-space: nowrap; }
 .precept-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .precept-branch { padding: 6px; background: var(--paper); border: 1px solid var(--line); }
-.precept-branch-name { font-size: 13px; letter-spacing: 0.3em; color: var(--ink-soft); border-bottom: 1px solid var(--line);
-  margin-bottom: 6px; padding-bottom: 2px; }
-.precept-card { padding: 6px 8px; margin-bottom: 6px; background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--line); }
-.precept-card.learned { border-left-color: var(--gold); background: #fffaf0; }
-.precept-card.locked { opacity: 0.45; }
+.precept-branch-name { font-size: 15px; font-weight: bold; letter-spacing: 0.3em; color: var(--ink); border-bottom: 2px solid var(--line);
+  margin-bottom: 8px; padding-bottom: 3px; }
+/* 状態は文字を薄くせず、左の太線・背景・枠・印で見分ける
+   習得できる＝朱の太線と白地、習得済み＝金の太線と淡い金地、前提が未習得＝灰色地と点線の枠、遺徳不足＝細い枠のまま */
+.precept-card { padding: 8px 10px; margin-bottom: 8px; background: #fff; color: var(--ink);
+  border: 1px solid var(--line); border-left: 5px solid var(--line); }
+.precept-card.learned { border-left-color: var(--gold); background: #fff6e0; }
+.precept-card.state-can { border-color: var(--vermilion); border-left-color: var(--vermilion); box-shadow: 0 0 0 1px var(--vermilion) inset; }
+.precept-card.state-locked { background: #e6dece; border-style: dashed; border-left-style: solid; border-left-color: #9a8f80; }
 .precept-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
-.precept-name { font-weight: bold; }
-.precept-level { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
-.precept-now { font-size: 12px; color: var(--vermilion-dark); }
-.precept-next, .precept-req { font-size: 12px; color: var(--ink-soft); }
-.precept-learn { margin-top: 4px; width: 100%; }
+.precept-name { font-size: 16px; font-weight: bold; }
+.precept-level { font-size: 13px; font-weight: bold; color: var(--ink-soft); white-space: nowrap; }
+.precept-badge { display: inline-block; margin: 3px 0 4px; padding: 1px 7px; font-size: 12px; font-weight: bold;
+  border: 1px solid var(--ink-soft); color: var(--ink-soft); background: var(--paper-light); }
+.state-can .precept-badge { background: var(--vermilion); border-color: var(--vermilion); color: #fff; }
+.state-max .precept-badge { background: var(--gold-ink); border-color: var(--gold-ink); color: #fff; }
+.state-locked .precept-badge { border-style: dashed; background: transparent; }
+.precept-now { font-size: 14px; font-weight: bold; color: var(--vermilion-dark); line-height: 1.5; }
+.precept-now.none { font-weight: normal; color: var(--ink-soft); }
+.precept-next { font-size: 14px; color: var(--ink); line-height: 1.5; }
+.precept-req { font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
+.state-locked .precept-req { color: var(--vermilion-dark); font-weight: bold; }
+.precept-learn { margin-top: 6px; width: 100%; font-size: 14px; }
+.state-can .precept-learn { background: var(--vermilion); border-color: var(--vermilion-dark); color: #fff; font-weight: bold; }
+.state-can .precept-learn:hover { background: var(--vermilion-dark); }
 
 /* 自動普請 */
 .auto-build { display: flex; align-items: center; gap: 4px; font-size: 14px; margin-left: 8px; cursor: pointer; }
@@ -882,7 +899,7 @@ button {
 .koku-chart { flex: 1 1 520px; min-width: 0; max-width: 640px; background: var(--paper-light); border: 1px solid var(--line); }
 .koku-stage-table { width: auto; flex-shrink: 0; }
 .koku-table td { font-variant-numeric: tabular-nums; }
-.koku-table td.koku-ahead { color: var(--gold); font-weight: bold; }
+.koku-table td.koku-ahead { color: var(--gold-ink); font-weight: bold; }
 .lineage-table td.koku-behind { color: var(--vermilion); }
 .koku-grid { stroke: var(--line); stroke-width: 1; }
 .koku-base { stroke: var(--ink-soft); stroke-width: 1; }
@@ -939,7 +956,7 @@ button {
 
 /* 家系タブ：天下統一の記録と周回 */
 .unified-box { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; padding: 8px 12px;
-  border: 1px solid var(--gold); background: var(--paper-light); color: var(--gold); font-weight: bold; }
+  border: 1px solid var(--gold); background: var(--paper-light); color: var(--gold-ink); font-weight: bold; }
 .unified-box.hidden, .cycle-box.hidden { display: none; }
 .dev-speed-label { font-size: 14px; color: var(--ink-soft); }
 
@@ -1129,11 +1146,11 @@ body.has-bg #tabs { background: rgba(231, 220, 196, 0.9); }
   color: var(--ink-soft);
   font-size: 13px;
 }
-.heirloom-item.owned .heirloom-icon { border-color: var(--gold); color: var(--gold); font-weight: bold; }
-.heirloom-icon.large { width: 64px; height: 64px; border-color: var(--gold); color: var(--gold); font-size: 15px; font-weight: bold; }
+.heirloom-item.owned .heirloom-icon { border-color: var(--gold); color: var(--gold-ink); font-weight: bold; }
+.heirloom-icon.large { width: 64px; height: 64px; border-color: var(--gold); color: var(--gold-ink); font-size: 15px; font-weight: bold; }
 .heirloom-get { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 8px 10px;
   background: #fbf3e2; border: 1px solid var(--gold); animation: heirloom-in 0.8s ease-out 0.3s both; }
-.heirloom-get-name { font-weight: bold; color: var(--gold); }
+.heirloom-get-name { font-weight: bold; color: var(--gold-ink); }
 @keyframes heirloom-in {
   0% { opacity: 0; transform: scale(0.8); }
   60% { opacity: 1; transform: scale(1.05); }

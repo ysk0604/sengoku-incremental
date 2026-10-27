@@ -1084,6 +1084,8 @@ window.Game = window.Game || {};
         const level = make('span', 'precept-level');
         top.appendChild(level);
         card.appendChild(top);
+        const badge = make('div', 'precept-badge');
+        card.appendChild(badge);
         const now = make('div', 'precept-now');
         card.appendChild(now);
         const next = make('div', 'precept-next');
@@ -1095,7 +1097,7 @@ window.Game = window.Game || {};
         });
         card.appendChild(button);
         col.appendChild(card);
-        cards[id] = { card: card, level: level, now: now, next: next, button: button };
+        cards[id] = { card: card, level: level, badge: badge, now: now, next: next, button: button };
       });
       grid.appendChild(col);
     });
@@ -1111,10 +1113,20 @@ window.Game = window.Game || {};
       const lv = sys.preceptLevel(s, id);
       const maxed = sys.preceptMaxed(s, id);
       const unlocked = sys.preceptUnlocked(s, id);
-      setClass(e.card, 'locked', !unlocked);
+      const can = sys.canLearnPrecept(s, id);
+      // 薄くするだけでなく、枠・背景・印でも状態が分かるようにする
+      const state = maxed ? 'max' : can ? 'can' : !unlocked ? 'locked' : 'short';
+      ['max', 'can', 'locked', 'short'].forEach(function (k) { setClass(e.card, 'state-' + k, state === k); });
       setClass(e.card, 'learned', lv > 0);
+      setText(e.badge, {
+        max: p.max === 1 ? '✓ 習得済み' : '✓ 最大Lv',
+        can: '◎ 習得できる',
+        locked: '✕ 前提の家訓が未習得',
+        short: '△ 遺徳が足りない',
+      }[state]);
       setText(e.level, 'Lv ' + lv + (p.max === null ? '' : ' / ' + p.max));
       setText(e.now, lv > 0 ? '現在：' + sys.preceptEffectText(id, lv) : '未習得');
+      setClass(e.now, 'none', lv === 0);
       setText(e.next, maxed ? '' : (lv > 0 ? '次：' : '効果：') + sys.preceptEffectText(id, lv + 1));
       setText(e.button, maxed ? (p.max === 1 ? '習得済み' : '最大Lv') : '習得（遺徳 ' + fmt.num(sys.preceptCost(s, id)) + '）');
       setDisabled(e.button, !sys.canLearnPrecept(s, id));
@@ -1796,7 +1808,10 @@ window.Game = window.Game || {};
     chart.textContent = '';
     const L = 54, R = 630, T = 12, B = 192;
     const maxGen = Math.max(15, s.generation);
-    const yMin = 3, yMax = 17;
+    // 縦の範囲は、目安と実際の大きい方に合わせる（少なくとも 1億 まで）
+    let top = sys.targetKokudaka(maxGen);
+    rows.forEach(function (r) { top = Math.max(top, r.kokudaka); });
+    const yMin = 3, yMax = Math.max(8, Math.ceil(Math.log10(Math.max(1, top)) + 0.3));
     const x = function (g) { return L + (g - 1) / (maxGen - 1) * (R - L); };
     const y = function (v) {
       const lv = Math.min(yMax, Math.max(yMin, Math.log10(Math.max(1, v))));
@@ -1804,7 +1819,7 @@ window.Game = window.Game || {};
     };
 
     // 目盛り（万・億・兆・京）と、段階に入る目安の代
-    [[4, '1万'], [8, '1億'], [12, '1兆'], [16, '1京']].forEach(function (t) {
+    [[4, '1万'], [8, '1億'], [12, '1兆'], [16, '1京'], [20, '1垓']].filter(function (t) { return t[0] <= yMax; }).forEach(function (t) {
       const ty = y(Math.pow(10, t[0]));
       chart.appendChild(svg('line', { x1: L, y1: ty, x2: R, y2: ty }, 'koku-grid'));
       const label = svg('text', { x: L - 6, y: ty + 4 }, 'koku-axis koku-axis-y');
