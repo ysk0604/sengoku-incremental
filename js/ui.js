@@ -329,17 +329,16 @@ window.Game = window.Game || {};
     defs.appendChild(marker);
     root.appendChild(defs);
 
-    // 地図の絵（map_stageN.webp）。あれば一番下に敷き、仮の川と山は隠す
-    root.classList.remove('has-map-img');
-    root.appendChild(mapImageLayer(root, stage.stage));
-
+    // 地図の絵（map_stageN.webp）。あれば一番下に敷き、なければ仮の川と山を描く
     const decor = svg('g', {}, 'map-decor');
-    m.rivers.forEach(function (d) { decor.appendChild(svg('path', { d: d }, 'river')); });
-    m.mountains.forEach(function (p) {
-      decor.appendChild(svg('path', {
-        d: 'M ' + (p.x - 28) + ' ' + (p.y + 16) + ' L ' + p.x + ' ' + (p.y - 18) + ' L ' + (p.x + 28) + ' ' + (p.y + 16) + ' Z',
-      }, 'mountain'));
-    });
+    root.appendChild(mapImageLayer(root, stage.stage, function () {
+      m.rivers.forEach(function (d) { decor.appendChild(svg('path', { d: d }, 'river')); });
+      m.mountains.forEach(function (p) {
+        decor.appendChild(svg('path', {
+          d: 'M ' + (p.x - 28) + ' ' + (p.y + 16) + ' L ' + p.x + ' ' + (p.y - 18) + ' L ' + (p.x + 28) + ' ' + (p.y + 16) + ' Z',
+        }, 'mountain'));
+      });
+    }));
     root.appendChild(decor);
 
     const roads = svg('g', {}, 'map-roads');
@@ -400,16 +399,19 @@ window.Game = window.Game || {};
     setText(els.mapTitle, '段階' + fmt.kanji(stage.stage) + '　' + stage.name + '（' + stage.region + '）');
   }
 
-  function mapImageLayer(root, stage) {
+  // 地図の絵の層。絵がなければ onMissing() で仮の川と山を描く
+  // 絵の上に和紙色の層を薄く重ね、城・街道・部隊を見やすくする
+  function mapImageLayer(root, stage, onMissing) {
     const layer = svg('g', {}, 'map-bg');
     const name = img.names.map(stage);
     root.dataset.mapStage = String(stage);
     img.load(name, function (ok) {
-      if (!ok || root.dataset.mapStage !== String(stage)) return; // 読み終わる前に別の段階の地図になった
+      if (root.dataset.mapStage !== String(stage)) return; // 読み終わる前に別の段階の地図になった
+      if (!ok) { onMissing(); return; }
       layer.appendChild(svg('image', {
         href: img.url(name), width: MAP_W, height: MAP_H, preserveAspectRatio: 'xMidYMid slice',
       }));
-      root.classList.add('has-map-img');
+      layer.appendChild(svg('rect', { width: MAP_W, height: MAP_H }, 'map-wash'));
     });
     return layer;
   }
@@ -424,8 +426,11 @@ window.Game = window.Game || {};
       const m = st.map;
       const item = make('div', 'pacified-item');
       const mini = svg('svg', { viewBox: '0 0 ' + MAP_W + ' ' + MAP_H }, 'pacified-svg');
-      mini.appendChild(mapImageLayer(mini, n));
-      m.rivers.forEach(function (d) { mini.appendChild(svg('path', { d: d }, 'river')); });
+      const decor = svg('g', {}, 'map-decor');
+      mini.appendChild(mapImageLayer(mini, n, function () {
+        m.rivers.forEach(function (d) { decor.appendChild(svg('path', { d: d }, 'river')); });
+      }));
+      mini.appendChild(decor);
       m.roads.forEach(function (r) {
         const a = m.positions[r[0]];
         const b = m.positions[r[1]];

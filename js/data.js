@@ -67,7 +67,7 @@ Game.data = {
         positions: {
           home: { x: 90, y: 330 },
           s1_nobushi: { x: 300, y: 220 },
-          s1_dogou: { x: 520, y: 120 },
+          s1_dogou: { x: 450, y: 130 },
           s1_kawazoi: { x: 540, y: 420 },
           s1_hatagashira: { x: 830, y: 280 },
         },
@@ -93,11 +93,11 @@ Game.data = {
       ],
       map: {
         positions: {
-          home: { x: 80, y: 320 },
-          s2_inuyama: { x: 290, y: 170 },
-          s2_iwakura: { x: 520, y: 240 },
-          s2_narumi: { x: 560, y: 450 },
-          s2_kiyosu: { x: 840, y: 330 },
+          home: { x: 110, y: 150 },
+          s2_inuyama: { x: 405, y: 145 },
+          s2_iwakura: { x: 530, y: 260 },
+          s2_narumi: { x: 580, y: 420 },
+          s2_kiyosu: { x: 790, y: 330 },
         },
         roads: [
           ['home', 's2_inuyama'],
@@ -122,7 +122,7 @@ Game.data = {
         positions: {
           home: { x: 80, y: 280 },
           s3_mikawa: { x: 300, y: 400 },
-          s3_kitabatake: { x: 540, y: 460 },
+          s3_kitabatake: { x: 640, y: 330 },
           s3_azai: { x: 480, y: 170 },
           s3_saito: { x: 830, y: 230 },
         },
@@ -148,11 +148,11 @@ Game.data = {
       ],
       map: {
         positions: {
-          home: { x: 80, y: 300 },
-          s4_imagawa: { x: 260, y: 420 },
-          s4_hojo: { x: 460, y: 480 },
-          s4_takeda: { x: 470, y: 250 },
-          s4_uesugi: { x: 680, y: 120 },
+          home: { x: 90, y: 250 },
+          s4_imagawa: { x: 280, y: 270 },
+          s4_hojo: { x: 470, y: 360 },
+          s4_takeda: { x: 450, y: 230 },
+          s4_uesugi: { x: 690, y: 150 },
           s4_mori: { x: 870, y: 340 },
         },
         roads: [
@@ -176,9 +176,9 @@ Game.data = {
       ],
       map: {
         positions: {
-          home: { x: 100, y: 300 },
-          s5_rengo: { x: 480, y: 300 },
-          s5_kessen: { x: 850, y: 300 },
+          home: { x: 550, y: 315 },
+          s5_rengo: { x: 290, y: 300 },
+          s5_kessen: { x: 150, y: 380 },
         },
         roads: [
           ['home', 's5_rengo'],

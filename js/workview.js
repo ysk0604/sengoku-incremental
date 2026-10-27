@@ -168,6 +168,11 @@ window.Game = window.Game || {};
       const sprite = r.vein && veinImg ? veinImg : rockImgs[deep > 0.5 ? 1 : 0];
       if (sprite) {
         ctx.drawImage(sprite, r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+        if (sprite === rockImgs[1]) {
+          // 深い岩の絵は金色の筋があるので、暗く沈めて金の鉱脈と見分けられるようにする
+          ctx.fillStyle = 'rgba(16, 10, 4, 0.35)';
+          ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+        }
       } else {
         ctx.fillStyle = deep > 0.5 ? COLORS.rockDeep : COLORS.rockTop;
         ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
@@ -241,9 +246,12 @@ window.Game = window.Game || {};
   const TOOL_IMG = 128;
   const TOOL_SIZE = 64;                // Canvas に描く大きさ
   const HOT = { x: 40, y: 40 };
-  const PIVOT = { x: 104, y: 116 };
-  const SWING_ANGLE = -0.6;            // 振り下ろすときの回転（ラジアン）
-  const SWING_SEC = 0.16;              // 振り下ろして戻るまで（速い道具は打つ間隔に合わせて短く）
+  const PIVOT = { x: 110, y: 108 };    // 柄の下の方（柄の線の上）
+  // 振り：ふだんは刃をカーソルに置き、打つ直前に振り上げて、打つ瞬間にカーソルの位置へ振り下ろす
+  const SWING_RAISE = 0.5;             // 振り上げの回転（ラジアン。時計回り＝刃が上がる）
+  const SWING_WINDUP_SEC = 0.22;       // 振り上げ始めてから打つまで（速い道具は打つ間隔に合わせて短く）
+  const SWING_DIP = 0.12;              // 打ったあと、勢いで少し振り抜く
+  const SWING_FOLLOW_SEC = 0.08;
   const NEW_TOOL_SEC = 0.9;            // 新調の演出の長さ
 
   // 素材ごとの色（仮の絵に使う。画像があれば画像を使う）
@@ -447,11 +455,23 @@ window.Game = window.Game || {};
     return a;
   }
 
+  // 打つ間隔は一定なので、前に打った時刻から次に打つ時刻が分かる
   function swingAngle(s, f, a, t) {
-    if (a.swingAt < 0) return 0;
-    const dur = Math.min(SWING_SEC, 0.8 / work.tool(s, f.kind).speed);
-    const p = (t - a.swingAt) / dur;
-    return p >= 0 && p < 1 ? SWING_ANGLE * Math.sin(p * Math.PI) : 0;
+    if (a.swingAt < 0 || !f.cursor.inside) return 0;
+    const interval = 1 / work.tool(s, f.kind).speed;
+    const since = t - a.swingAt;
+    const follow = Math.min(SWING_FOLLOW_SEC, interval * 0.15);
+    if (since < follow) return -SWING_DIP * Math.sin(Math.PI * since / follow);
+    const windup = Math.min(SWING_WINDUP_SEC, interval * 0.85);
+    const toNext = interval - since;
+    if (toNext <= 0 || toNext > windup) return 0; // 構えて待つ（遅れた打撃は刃をカーソルに置いたまま待つ）
+    const p = 1 - toNext / windup;
+    if (p < 0.6) {
+      const q = p / 0.6;
+      return SWING_RAISE * (1 - (1 - q) * (1 - q)); // ゆっくり振り上げる
+    }
+    const q = (p - 0.6) / 0.4;
+    return SWING_RAISE * (1 - q * q); // 速くなりながら振り下ろす
   }
 
   function drawCursor(s, f, t) {

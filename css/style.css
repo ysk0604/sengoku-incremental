@@ -944,8 +944,8 @@ body.has-bg { background-size: cover; background-position: center; }
 body.has-bg #main { background: rgba(243, 236, 220, 0.86); }
 body.has-bg #tabs { background: rgba(231, 220, 196, 0.9); }
 
-/* 地図の絵があるときは、仮の川と山を隠す */
-.has-map-img .map-decor { display: none; }
+/* 地図の絵の上に重ねる和紙色の層（城・街道・部隊を見やすくする） */
+.map-wash { fill: var(--paper-light); opacity: 0.3; pointer-events: none; }
 
 /* ---- 作業画面の横：道具の小さな絵 ---- */
 .work-tool-head { display: flex; align-items: center; gap: 6px; }
@@ -1133,7 +1133,7 @@ body.has-bg #tabs { background: rgba(231, 220, 196, 0.9); }
 }
 .succession-scene.has-img { width: 100%; height: auto; aspect-ratio: 960 / 400; max-height: 22vh; }
 .succession-scene.short { height: 60px; }
-.succession-scene.short.has-img { aspect-ratio: 960 / 240; max-height: 14vh; }
+.succession-scene.short.has-img { height: auto; aspect-ratio: 960 / 240; max-height: 14vh; }
 .fresh .succession-scene { animation: scene-fade 0.6s ease-out; }
 .fresh .succession-scene .img-fill { animation: scene-zoom 8s ease-out forwards; }
 .fresh .succession-head .portrait { animation: ceremony-fade 0.6s ease-out both; }
