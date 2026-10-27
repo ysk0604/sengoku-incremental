@@ -210,6 +210,8 @@ button {
   border-radius: 4px;
   background: #8f9a5c;
   cursor: none; /* OS のカーソルは隠し、道具の絵を出す（作業画面の外では元に戻る） */
+  touch-action: none; /* 指でなぞっても画面がスクロール・拡大しない */
+  -webkit-touch-callout: none;
 }
 .work-side {
   flex: 0 0 200px;
@@ -1239,4 +1241,135 @@ body.has-bg #tabs { background: rgba(231, 220, 196, 0.9); }
 /* 動きを減らす設定の人には、演出を止める */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ==== スマホ・タブレット（ステップ8）。PC（幅1024px以上・高さ501px以上）の見た目は変えない ==== */
+
+/* 幅1023px以下（タブレット・スマホの横画面）：最低幅をなくし、並びを折り返す */
+@media (max-width: 1023px) {
+  body { min-width: 0; min-height: 0; }
+  .work-panel { flex-wrap: wrap; }
+  .work-canvas { flex: 1 1 100%; max-width: none; }
+  .work-side { flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; gap: 10px 16px; }
+  .work-side > * { flex: 1 1 180px; }
+  .work-tool, .work-mine-box { border-top: none; padding-top: 0; }
+  .map-layout { flex-direction: column; align-items: stretch; }
+  .map-side { width: auto; }
+  .general-list { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .transfer { flex-direction: column; }
+  /* 表は横に流せるようにする（画面からはみ出さない） */
+  .lineage-table { display: block; overflow-x: auto; }
+  .precept-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 高さが低い横画面（スマホの横向き）：ヘッダーとタブを詰める */
+@media (max-height: 500px) and (orientation: landscape) {
+  #header { gap: 10px; padding: 4px 12px; }
+  .header-house { width: auto; flex-shrink: 1; min-width: 0; }
+  .house-title { font-size: 15px; }
+  .reign-line { margin: 1px 0 2px; }
+  .header-kokudaka { min-width: 0; }
+  .kokudaka-value { font-size: 24px; }
+  .header-kokudaka .label { font-size: 13px; }
+  .header-resources { gap: 6px; }
+  .res { min-width: 46px; }
+  .res-value { font-size: 16px; }
+  .res-rate { display: none; }
+  .save-status { display: none; }
+  #tabs { width: 72px; padding: 6px 4px; }
+  .tab { padding: 8px 0; font-size: 14px; letter-spacing: 0.1em; }
+  #main { padding: 10px 14px; }
+  .modal-box, .succession-box, .ending-box, .event-box { max-height: calc(100vh - 12px); overflow-y: auto; padding: 12px 16px; }
+  .precept-box { max-height: calc(100vh - 12px); }
+  .ending-image.has-img { max-height: 24vh; }
+}
+
+/* 幅600px以下（スマホの縦向き）：タブを画面下に、ヘッダーの数値を2段に */
+@media (max-width: 600px) {
+  body { font-size: 15px; }
+  /* ヘッダー：1段目 家名、2段目 治世、3段目 石高と隠居ボタン、4段目 米・金・兵などの数値（6列） */
+  #header { flex-wrap: wrap; align-items: center; gap: 2px 10px; padding: 6px 10px 6px; }
+  .header-house { display: contents; }
+  .house-line { order: 1; flex: 1 1 100%; flex-wrap: wrap; white-space: normal; }
+  .house-title { font-size: 16px; }
+  .reign-line { order: 2; flex: 1 1 100%; margin: 0; flex-wrap: wrap; }
+  .header-kokudaka { order: 3; min-width: 0; }
+  .kokudaka-value { font-size: 26px; }
+  .retire-line { order: 4; margin-left: auto; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .retire-button { padding: 6px 10px; font-size: 13px; }
+  .retire-chance { font-size: 12px; }
+  .header-resources { order: 5; width: 100%; margin-left: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; }
+  .res { min-width: 0; text-align: center; }
+  .res-name { font-size: 12px; }
+  .res-value { font-size: 15px; white-space: nowrap; }
+  .res-rate { font-size: 11px; height: 14px; white-space: nowrap; }
+  /* 自動保存の時刻は、狭い画面では置き場が無いので出さない（設定タブに「10秒ごとに自動でセーブ」とある） */
+  .save-status { display: none; }
+
+  #layout { flex-direction: column; }
+  #main { order: 1; padding: 10px 10px 16px; }
+  #tabs {
+    order: 2; width: auto; flex-direction: row; gap: 4px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    border-right: none; border-top: 2px solid var(--ink);
+  }
+  .tab { flex: 1; padding: 12px 0; font-size: 15px; letter-spacing: 0.05em; }
+
+  /* 内政 */
+  .domestic-top { flex-wrap: wrap; gap: 10px; }
+  .castle-image { margin-left: auto; }
+  .facility { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .facility-action { width: 100%; flex-direction: row; align-items: center; justify-content: space-between; }
+  .facility.locked .facility-lock { position: static; transform: none; order: -1; width: 100%; text-align: center; }
+  .facility-name { font-size: 17px; }
+
+  /* 武将 */
+  .generals-top { flex-direction: column; align-items: stretch; gap: 10px; }
+  .recruit-button { width: 100%; }
+  .general-list { grid-template-columns: 1fr; }
+
+  /* 地図 */
+  .map-header { flex-wrap: wrap; }
+  .far-row { flex-direction: column; gap: 0; }
+  .far-stage { width: auto; }
+
+  /* 家系・設定 */
+  .lineage-top { gap: 10px 20px; }
+  .lineage-big { font-size: 20px; }
+  .heirloom-list { grid-template-columns: 1fr; }
+  .koku-chart { flex-basis: 100%; }
+  .koku-stage-table { width: 100%; }
+  .settings-row { flex-wrap: wrap; }
+
+  /* 画面いっぱいのモーダル */
+  .modal { align-items: flex-start; padding: 8px; overflow-y: auto; }
+  .modal-box, .succession-box, .succession-box.wide, .precept-box, .event-box, .ending-box {
+    width: 100%; max-width: 100%; max-height: calc(100vh - 16px); overflow-y: auto; padding: 14px 14px;
+  }
+  .succession-box.wide .succession-nav { margin: 12px -14px -14px; padding: 10px 14px; bottom: -14px; }
+  .precept-foot { margin: 12px -14px -14px; padding: 10px 14px; bottom: -14px; }
+  .precept-grid { grid-template-columns: 1fr; }
+  .precept-card { margin-left: 0 !important; }
+  .heir-list { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .ending-buttons { flex-wrap: wrap; }
+}
+
+/* 指で操作する画面：ボタンを押しやすい大きさにする */
+@media (pointer: coarse), (max-width: 600px) {
+  .btn { min-height: 40px; }
+  .btn-small { min-height: 36px; font-size: 13px; padding: 6px 10px; }
+  .general-card .btn, .assign-buttons .btn { min-height: 34px; }
+  .form-troops { height: 32px; }
+}
+
+/* スマホの縦向き：地図は横に流して大きく見せ（城の名前を読める・押せる大きさに）、部隊編成を地図のすぐ下に出す */
+@media (max-width: 600px) {
+  .map-column { display: contents; }
+  .map-header { order: 1; }
+  .map-frame { order: 2; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .map-svg { width: 760px; max-width: none; }
+  .map-side { order: 3; }
+  .far-powers { order: 4; margin-top: 0; }
+  .pacified-maps { order: 5; }
+  .map-layout { gap: 10px; }
 }

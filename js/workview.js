@@ -19,6 +19,8 @@ window.Game = window.Game || {};
   let lastFrame = 0;
   let lastDraw = 0;
   let fontFamily = 'serif';
+  // 指で操作しているか（作業画面の説明の文を変える）。最後に触れた操作で切り替える
+  let touchUi = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   const cursor = { x: W.WIDTH / 2, y: W.HEIGHT / 2, inside: false };
 
   function $(id) { return document.getElementById(id); }
@@ -482,10 +484,14 @@ window.Game = window.Game || {};
 
     if (!f.cursor.inside && !showing) {
       if (!s.work.manualRate[f.kind]) {
+        // 画面が縮んでいても読める大きさにする（スマホでは Canvas が半分ほどに縮む）
+        const shrink = W.WIDTH / Math.max(1, els.canvas.clientWidth);
+        const size = Math.round(16 * Math.min(1.9, Math.max(1, shrink)));
+        const how = touchUi ? '指でなぞると' : 'カーソルを乗せると';
         ctx.fillStyle = COLORS.hint;
-        ctx.font = 'bold 16px ' + fontFamily;
+        ctx.font = 'bold ' + size + 'px ' + fontFamily;
         ctx.textAlign = 'center';
-        ctx.fillText(f.kind === 'rice' ? 'カーソルを乗せると、円の中の稲穂を鎌で刈り取ります' : 'カーソルを乗せると、円の中の岩をツルハシで砕きます',
+        ctx.fillText(how + (f.kind === 'rice' ? '、円の中の稲穂を鎌で刈り取ります' : '、円の中の岩をツルハシで砕きます'),
           W.WIDTH / 2, W.HEIGHT / 2);
         ctx.textAlign = 'start';
       }
@@ -668,9 +674,22 @@ window.Game = window.Game || {};
       cursor.y = (e.clientY - rect.top) * (W.HEIGHT / rect.height);
       cursor.inside = true;
     };
-    els.canvas.addEventListener('mousemove', move);
-    els.canvas.addEventListener('mouseenter', move);
-    els.canvas.addEventListener('mouseleave', function () { cursor.inside = false; });
+    // マウスは乗せている間、指は触れている間だけ道具を出す（指でなぞって刈る・掘る）
+    // 指で触れている間は画面がスクロールしないよう、CSS で touch-action: none にしてある
+    const leave = function (e) {
+      if (e.pointerType === 'mouse' && e.type !== 'pointerleave') return;
+      cursor.inside = false;
+    };
+    els.canvas.addEventListener('pointermove', move);
+    els.canvas.addEventListener('pointerenter', move);
+    els.canvas.addEventListener('pointerdown', function (e) {
+      touchUi = e.pointerType !== 'mouse';
+      move(e);
+      if (e.pointerType !== 'mouse') e.preventDefault();
+    });
+    els.canvas.addEventListener('pointerleave', leave);
+    els.canvas.addEventListener('pointerup', leave);
+    els.canvas.addEventListener('pointercancel', leave);
 
     els.viewRice.addEventListener('click', function () { setView('rice'); });
     els.viewMine.addEventListener('click', function () { setView('mine'); });

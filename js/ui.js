@@ -456,7 +456,7 @@ window.Game = window.Game || {};
       mapUi.origin = mapUi.origin === id ? null : id;
       mapUi.troopsTouched = false; // 出発地を変えたら、その拠点の全兵に合わせ直す
     } else if (!mapUi.origin) {
-      if (sys.isVisible(s, id)) mapUi.message = '先に出発する自領をクリックしてください';
+      if (sys.isVisible(s, id)) mapUi.message = '先に出発する自領を選んでください';
     } else if (sys.isVisible(s, id)) {
       const troops = Number(els.formTroops.value);
       const leader = els.formGeneral.value === '' ? null : Number(els.formGeneral.value);
@@ -710,9 +710,9 @@ window.Game = window.Game || {};
     if (sys.unitsInUse(s) >= sys.maxUnits(s)) {
       status = '部隊がすべて出陣中です（同時に ' + sys.maxUnits(s) + ' 部隊まで）';
     } else if (!mapUi.origin) {
-      status = '① 出発する自領（朱色の城）をクリック';
+      status = '① 出発する自領（朱色の城）を選ぶ';
     } else {
-      status = '② 攻める敵城か、補充する隣の自領をクリック（出発地：' + nodeName(s, mapUi.origin) + '）';
+      status = '② 攻める敵城か、補充する隣の自領を選ぶ（出発地：' + nodeName(s, mapUi.origin) + '）';
     }
     setText(els.orderStatus, mapUi.message);
     setText(els.mapHint, status);
@@ -1969,9 +1969,9 @@ window.Game = window.Game || {};
     if (up) replay(els.castleImage, 'castle-up');
   }
 
-  // 全体の背景（bg_main.webp。スマホの縦画面では bg_main_portrait.webp）
+  // 全体の背景（bg_main.webp。縦長の画面では bg_main_portrait.webp）
   function loadBackground() {
-    const portrait = window.matchMedia('(orientation: portrait) and (max-width: 600px)');
+    const portrait = window.matchMedia('(orientation: portrait)');
     const apply = function () {
       const name = portrait.matches ? 'bg_main_portrait' : 'bg_main';
       img.load(name, function (ok) {

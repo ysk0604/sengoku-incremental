@@ -31,6 +31,19 @@ window.Game = window.Game || {};
     setInterval(Game.state.save, cfg.AUTOSAVE_MS);
     // リロード・終了時にも保存（最大10秒ぶんの巻き戻りを防ぐ）
     window.addEventListener('beforeunload', Game.state.save);
+    // スマホはアプリを切り替えると beforeunload が来ないことがあるので、隠れたときにも保存する
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') Game.state.save();
+    });
+    registerServiceWorker();
+  }
+
+  // PWA：オフラインでも遊べるようにする（http/https で開いたときだけ。file:// では使えない）
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
   }
 
   start();
