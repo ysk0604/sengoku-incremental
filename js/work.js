@@ -124,18 +124,34 @@ window.Game = window.Game || {};
   // ---- 作業画面（田んぼ・金山）の中身 ----
   // 画面ごとに1つ作る。稲穂・岩・跳ねている資源・数字のポップアップを持つ（セーブしない）
 
-  work.createField = function (s, kind) {
+  // 作業画面の形。wide：横長（PC など。760×260、岩 12×4）
+  // tall：スマホの縦向き用の縦長（380×520。面積は同じ。岩 6×8 で、2段で1間＝1間あたりの岩の数は同じ）
+  function layout(tall) {
+    return tall
+      ? { w: W.WIDTH / 2, h: W.HEIGHT * 2, cols: W.MINE.COLS / 2, rows: W.MINE.ROWS * 2, rowsPerDepth: 2 }
+      : { w: W.WIDTH, h: W.HEIGHT, cols: W.MINE.COLS, rows: W.MINE.ROWS, rowsPerDepth: 1 };
+  }
+
+  work.createField = function (s, kind, tall) {
+    const L = layout(!!tall);
     const f = {
-      kind: kind, items: [], drops: [], pops: [],
+      kind: kind, items: [], drops: [], pops: [], bursts: [],
+      tall: !!tall, w: L.w, h: L.h, cols: L.cols, rows: L.rows, rowsPerDepth: L.rowsPerDepth,
+      // 画面側が決める倍率（指で操作するとき、当たる円・稲穂を大きくする）。シミュレーションでは 1 のまま
+      radiusScale: 1, earScale: 1,
+      onLand: null, onBreak: null, // 画面側の演出（資源が入った・手作業で砕いた）
       spawnTimer: 0, hitTimer: 0, strikeFlash: 0, strikes: 0, nextId: 1, // strikes：打った回数（道具を振る動きに使う）
-      cursor: { x: W.WIDTH / 2, y: W.HEIGHT / 2, inside: false },
+      cursor: { x: L.w / 2, y: L.h / 2, inside: false },
       windowTime: 0, windowUnits: 0, // 手作業の稼ぎを1秒ごとに測る
     };
     if (kind === 'mine') {
-      for (let r = 0; r < W.MINE.ROWS; r++) addRockRow(s, f, r);
+      for (let r = 0; r < f.rows; r++) addRockRow(s, f, r);
     }
     return f;
   };
+
+  work.HIT_FLASH = 0.18; // 当たった稲穂・岩が光って揺れる秒数
+  work.BURST_SECONDS = 0.35; // 刈れた・砕けた所の光の輪
 
   // ---- 稲刈り ----
 
@@ -168,9 +184,10 @@ window.Game = window.Game || {};
     // 何か所か試して、ほかの稲穂から一番離れた場所に生やす（重なりすぎないように）
     let best = null;
     let bestD = -1;
+    const k = f.earScale; // 稲穂を大きく描くときは、端に寄りすぎないよう余白も広げる
     for (let i = 0; i < 4; i++) {
-      const x = R.MARGIN_X + Math.random() * (W.WIDTH - R.MARGIN_X * 2);
-      const y = R.MARGIN_TOP + Math.random() * (W.HEIGHT - R.MARGIN_TOP - R.MARGIN_BOTTOM);
+      const x = R.MARGIN_X * k + Math.random() * (f.w - R.MARGIN_X * k * 2);
+      const y = R.MARGIN_TOP * k + Math.random() * (f.h - (R.MARGIN_TOP + R.MARGIN_BOTTOM) * k);
       let d = Infinity;
       f.items.forEach(function (e) { d = Math.min(d, (e.x - x) * (e.x - x) + (e.y - y) * (e.y - y)); });
       if (d > bestD) { bestD = d; best = { x: x, y: y }; }
@@ -192,8 +209,8 @@ window.Game = window.Game || {};
   // ---- 金山 ----
   // 坑道を真下へ掘る。岩は COLS × ROWS のます目。一番上の段を全部砕くと1段（1間）深くなる
 
-  work.cellWidth = function () { return W.WIDTH / W.MINE.COLS; };
-  work.cellHeight = function () { return W.HEIGHT / W.MINE.ROWS; };
+  work.cellWidth = function (f) { return f.w / f.cols; };
+  work.cellHeight = function (f) { return f.h / f.rows; };
 
   work.veinChance = function (s) {
     return W.MINE.VEIN_CHANCE * (1 + sys.preceptLevel(s, 'koumyaku') * PRE.koumyaku.vein);
@@ -208,10 +225,10 @@ window.Game = window.Game || {};
   };
 
   function addRockRow(s, f, row) {
-    const depth = s.work.depth + row;
-    const cw = work.cellWidth();
-    const ch = work.cellHeight();
-    for (let c = 0; c < W.MINE.COLS; c++) {
+    const depth = s.work.depth + Math.floor(row / f.rowsPerDepth);
+    const cw = work.cellWidth(f);
+    const ch = work.cellHeight(f);
+    for (let c = 0; c < f.cols; c++) {
       const vein = Math.random() < work.veinChance(s);
       const hp = work.rockHp(depth);
       f.items.push({
@@ -222,14 +239,15 @@ window.Game = window.Game || {};
     }
   }
 
-  // 一番上の段が空になったら、全体を1段上げて下に新しい段を足す
+  // 一番上の1間（縦長の画面では2段）が空になったら、全体を1間上げて下に新しい段を足す
   function descend(s, f) {
-    while (!f.items.some(function (r) { return r.row === 0; })) {
+    const n = f.rowsPerDepth;
+    while (!f.items.some(function (r) { return r.row < n; })) {
       s.work.depth++;
       s.work.maxDepth = Math.max(s.work.maxDepth, s.work.depth);
-      const ch = work.cellHeight();
-      f.items.forEach(function (r) { r.row--; r.y -= ch; });
-      addRockRow(s, f, W.MINE.ROWS - 1);
+      const ch = work.cellHeight(f);
+      f.items.forEach(function (r) { r.row -= n; r.y -= ch * n; });
+      for (let i = n; i > 0; i--) addRockRow(s, f, f.rows - i);
     }
   }
 
@@ -247,7 +265,7 @@ window.Game = window.Game || {};
     s.resources.gold -= work.blastCost(s);
     s.work.blastCd = W.BLAST.COOLDOWN;
     // 発破の分は手作業の記録に数えない（自動の割合が膨らまないように）
-    f.items.filter(function (r) { return r.row < W.BLAST.ROWS; }).forEach(function (r) { breakItem(s, f, r, false); });
+    f.items.filter(function (r) { return r.row < W.BLAST.ROWS * f.rowsPerDepth; }).forEach(function (r) { breakItem(s, f, r, false); });
     descend(s, f);
     f.strikeFlash = 0.4;
     return true;
@@ -259,7 +277,7 @@ window.Game = window.Game || {};
     const cx = f.cursor.x;
     const cy = f.cursor.y;
     if (f.kind === 'rice') {
-      const r = radius + W.RICE.HIT_PAD;
+      const r = radius + W.RICE.HIT_PAD * f.earScale;
       return (item.x - cx) * (item.x - cx) + (item.y - cy) * (item.y - cy) <= r * r;
     }
     // 岩：円と四角が重なっているか
@@ -279,12 +297,16 @@ window.Game = window.Game || {};
     const drop = { x: x, y: y, t: 0, units: units, depthMult: depthMult, big: f.kind === 'rice' ? item.bumper : item.vein };
     if (f.drops.length < W.MAX_DROPS) f.drops.push(drop);
     else land(s, f, drop); // 跳ねている資源が多すぎるときは、すぐ加える
+    if (f.bursts.length < W.MAX_POPS) f.bursts.push({ x: x, y: y, t: 0, big: drop.big });
+    if (manual && f.onBreak) f.onBreak(drop);
   }
 
   function strike(s, f) {
     const tool = work.tool(s, f.kind);
-    f.items.filter(function (it) { return inRange(f, it, tool.radius); }).forEach(function (it) {
+    const radius = tool.radius * f.radiusScale;
+    f.items.filter(function (it) { return inRange(f, it, radius); }).forEach(function (it) {
       it.hp -= tool.power;
+      it.hitT = work.HIT_FLASH;
       if (it.hp <= 0) breakItem(s, f, it, true);
     });
     if (f.kind === 'mine') descend(s, f);
@@ -298,6 +320,7 @@ window.Game = window.Game || {};
     work.gain(s, f.kind, amount);
     if (f.pops.length >= W.MAX_POPS) f.pops.shift();
     f.pops.push({ x: d.x, y: d.y - 10, t: 0, text: '+' + Game.format.num(amount), big: d.big });
+    if (f.onLand) f.onLand(d, amount);
   }
 
   // 画面を閉じるとき：跳ねている資源をすぐ加える（取りこぼさないように）
@@ -329,6 +352,8 @@ window.Game = window.Game || {};
       return false;
     });
     f.pops = f.pops.filter(function (p) { p.t += dt; return p.t < W.POP_SECONDS; });
+    f.bursts = f.bursts.filter(function (b) { b.t += dt; return b.t < work.BURST_SECONDS; });
+    f.items.forEach(function (it) { if (it.hitT > 0) it.hitT = Math.max(0, it.hitT - dt); });
     f.strikeFlash = Math.max(0, f.strikeFlash - dt);
     if (f.kind === 'rice') tickEars(s, f, dt);
 

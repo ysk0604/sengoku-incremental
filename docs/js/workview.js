@@ -21,7 +21,23 @@ window.Game = window.Game || {};
   let fontFamily = 'serif';
   // 指で操作しているか（作業画面の説明の文を変える）。最後に触れた操作で切り替える
   let touchUi = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-  const cursor = { x: W.WIDTH / 2, y: W.HEIGHT / 2, inside: false };
+  // 指・マウスの位置（画面の座標で持ち、毎フレーム作業画面の座標に直す。画面の向きが変わっても合うように）
+  const pointer = { cx: 0, cy: 0, touch: false, inside: false, id: null };
+
+  function mq(q) { return window.matchMedia ? window.matchMedia(q) : null; }
+  // スマホの縦向き：作業画面を縦長（380×520）にする
+  const tallMq = mq('(max-width: 600px) and (orientation: portrait)');
+  const reducedMq = mq('(prefers-reduced-motion: reduce)');
+
+  // ---- 指で操作するときの大きさ（画面上の px）。PC のマウスでは使わず、今までどおり ----
+  const FINGER_LIFT = 70;   // 道具と当たる円を、指より上に出す
+  const MIN_EAR_PX = 62;    // 稲穂の絵の高さ（絵の上下に透明な余白があるので、見える穂は約50px。岩は縦長の画面で約57px）
+  const MIN_RING_PX = 40;   // 当たる円の半径（直径80px）。一番弱い道具でこの大きさ、強い道具は同じ割合で大きく
+  const MIN_TOOL_PX = 72;   // 道具の絵
+  const MIN_POP_PX = 20;    // 「+12」の数字
+  // 毎フレーム決める倍率。css：作業画面の座標1あたりの画面上の px。big：指で操作する大きさにするか
+  const view = { css: 1, big: false, ear: 1, tool: 1, font: 1 };
+  let canvasAspect = '';
 
   function $(id) { return document.getElementById(id); }
   function cur() { return Game.state.current; }
@@ -34,16 +50,135 @@ window.Game = window.Game || {};
     return !document.hidden && els.panel.classList.contains('active');
   }
 
-  // 代が変わる・データが入れ替わると作り直す
-  function fieldFor(s, kind) {
+  // 代が変わる・データが入れ替わると作り直す。画面の向きが変わって形（横長・縦長）が変わったときも作り直す
+  function fieldFor(s, kind, tall) {
     const key = s.generation + ':' + s.lineage.length;
     if (key !== fieldsKey || fields.state !== s) {
       fields = { state: s };
       fieldsKey = key;
       shownField = null; // 前の代の画面は捨てる（跳ねている資源も前の代のもの）
     }
-    if (!fields[kind]) fields[kind] = work.createField(s, kind);
+    if (fields[kind] && fields[kind].tall !== tall) {
+      if (shownField === fields[kind]) hideField(s);
+      fields[kind] = null;
+    }
+    if (!fields[kind]) {
+      const f = work.createField(s, kind, tall);
+      f.onLand = function (d) { flyToHeader(f, d); };
+      f.onBreak = buzz;
+      fields[kind] = f;
+    }
     return fields[kind];
+  }
+
+  // Canvas の形と画素数を作業画面に合わせ、指で操作するときの倍率を決める
+  function fitCanvas(f) {
+    const c = els.canvas;
+    const ar = f.w + ' / ' + f.h;
+    if (canvasAspect !== ar) {
+      canvasAspect = ar;
+      c.style.aspectRatio = ar;
+    }
+    const cssW = c.clientWidth;
+    if (cssW <= 0) return false;
+    // 高精細の画面ではにじまないよう、画素を増やす（重くならないよう2倍まで）
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const k = Math.max(0.5, cssW * dpr / f.w);
+    const bw = Math.round(f.w * k);
+    const bh = Math.round(f.h * k);
+    if (c.width !== bw || c.height !== bh) {
+      c.width = bw;
+      c.height = bh;
+    }
+    ctx.setTransform(bw / f.w, 0, 0, bh / f.h, 0, 0);
+
+    const css = cssW / f.w;
+    view.css = css;
+    view.big = touchUi || f.tall;
+    view.ear = view.big ? Math.min(2.4, Math.max(1, MIN_EAR_PX / (EAR_H * css))) : 1;
+    view.tool = view.big ? Math.max(1, MIN_TOOL_PX / (TOOL_SIZE * css)) : 1;
+    view.font = view.big ? Math.max(1, MIN_POP_PX / (15 * css)) : 1;
+    f.earScale = view.ear;
+    f.radiusScale = view.big ? Math.max(1, MIN_RING_PX / (work.toolList(f.kind)[0].radius * css)) : 1;
+    return true;
+  }
+
+  // 指・マウスの位置を作業画面の座標に直す。指のときは FINGER_LIFT だけ上にずらし、画面の中に収める
+  function placeCursor(f) {
+    const rect = els.canvas.getBoundingClientRect();
+    if (!pointer.inside || rect.width <= 0) {
+      f.cursor.inside = false;
+      return;
+    }
+    let x = (pointer.cx - rect.left) * (f.w / rect.width);
+    let y = (pointer.cy - (pointer.touch ? FINGER_LIFT : 0) - rect.top) * (f.h / rect.height);
+    if (pointer.touch) {
+      x = Math.min(f.w, Math.max(0, x));
+      y = Math.min(f.h, Math.max(0, y));
+    }
+    f.cursor.x = x;
+    f.cursor.y = y;
+    f.cursor.inside = true;
+  }
+
+  // ---- 取れたことが分かる演出：米粒・金の粒がヘッダーの数字へ飛ぶ／短く震える ----
+  let flyers = 0;
+  const MAX_FLYERS = 12; // 同時に飛ばす数（多いときは飛ばさずに入れる）
+
+  function flyToHeader(f, d) {
+    if (flyers >= MAX_FLYERS || document.hidden || (reducedMq && reducedMq.matches)) return;
+    const target = $(f.kind === 'rice' ? 'res-rice' : 'res-gold');
+    const tr = target && target.getBoundingClientRect();
+    const cr = els.canvas.getBoundingClientRect();
+    if (!tr || tr.width <= 0 || cr.width <= 0) return;
+    const el = document.createElement('div');
+    if (!el.animate) return;
+    const x0 = cr.left + d.x * cr.width / f.w;
+    const y0 = cr.top + d.y * cr.height / f.h;
+    const dx = tr.left + tr.width / 2 - x0;
+    const dy = tr.top + tr.height / 2 - y0;
+    const size = d.big ? 28 : 20;
+    const name = f.kind === 'rice' ? 'rice_drop' : 'mine_drop';
+    el.className = 'fly-grain' + (img(name) ? '' : ' plain') + (f.kind === 'mine' ? ' gold' : '');
+    if (img(name)) el.style.backgroundImage = 'url("' + Game.images.url(name) + '")';
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+    el.style.left = (x0 - size / 2) + 'px';
+    el.style.top = (y0 - size / 2) + 'px';
+    document.body.appendChild(el);
+    flyers++;
+    const anim = el.animate([
+      { transform: 'translate(0px, 0px) scale(1)' },
+      { transform: 'translate(' + dx * 0.25 + 'px, ' + (dy * 0.25 - 36) + 'px) scale(1.2)', offset: 0.3 },
+      { transform: 'translate(' + dx + 'px, ' + dy + 'px) scale(0.6)' },
+    ], { duration: 700, easing: 'ease-in' });
+    let done = false;
+    const finish = function () {
+      if (done) return;
+      done = true;
+      el.remove();
+      flyers--;
+      bump(target);
+    };
+    anim.onfinish = finish;
+    anim.oncancel = finish;
+  }
+
+  // ヘッダーの数字を一瞬大きくする
+  function bump(el) {
+    el.classList.remove('bump');
+    void el.offsetWidth;
+    el.classList.add('bump');
+  }
+
+  // Android：刈れた・掘れたときに短く震える（設定で切れる。iPhone の Safari は震える機能がない）
+  let lastBuzz = 0;
+  function buzz() {
+    if (!touchUi || !navigator.vibrate || cur().settings.vibrate === false) return;
+    const now = performance.now();
+    if (now - lastBuzz < 90) return;
+    lastBuzz = now;
+    try { navigator.vibrate(15); } catch (e) { /* 震えられない端末 */ }
   }
 
   // 画面を閉じた・切り替えた：跳ねている資源をすぐ加えて、カーソルを外す
@@ -69,15 +204,14 @@ window.Game = window.Game || {};
     lastFrame = now;
 
     const kind = s.work.view === 'mine' && work.mineUnlocked(s) ? 'mine' : 'rice';
-    const f = fieldFor(s, kind);
+    const f = fieldFor(s, kind, !!(tallMq && tallMq.matches));
     if (shownField !== f) {
       hideField(s);
       shownField = f;
     }
     work.displayed = kind;
-    f.cursor.x = cursor.x;
-    f.cursor.y = cursor.y;
-    f.cursor.inside = cursor.inside;
+    if (!fitCanvas(f)) return;
+    placeCursor(f);
     work.tickField(s, f, dt);
     draw(s, f, now / 1000);
   }
@@ -104,52 +238,82 @@ window.Game = window.Game || {};
   const EAR_H = 33;
 
   function draw(s, f, t) {
-    ctx.clearRect(0, 0, W.WIDTH, W.HEIGHT);
+    ctx.clearRect(0, 0, f.w, f.h);
     if (f.kind === 'rice') drawPaddy(f, t); else drawMine(s, f, t);
+    drawBursts(f);
     drawDrops(f);
     drawPops(f);
     drawCursor(s, f, t);
   }
 
+  // 背景の絵を、形を崩さずに画面いっぱいに描く（はみ出す分は切る。横長の画面では今までどおり全体）
+  function drawCover(pic, w, h) {
+    const iw = pic.naturalWidth || pic.width;
+    const ih = pic.naturalHeight || pic.height;
+    const k = Math.max(w / iw, h / ih);
+    const sw = w / k;
+    const sh = h / k;
+    ctx.drawImage(pic, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, w, h);
+  }
+
+  // 当たった稲穂・岩の揺れ（左右に細かく）と光の強さ
+  function hitShake(it, t) {
+    if (!(it.hitT > 0)) return 0;
+    return Math.sin(t * 90 + it.id) * 3 * view.font * (it.hitT / work.HIT_FLASH);
+  }
+
   function drawPaddy(f, t) {
     const bg = img('rice_field');
     if (bg) {
-      ctx.drawImage(bg, 0, 0, W.WIDTH, W.HEIGHT);
+      drawCover(bg, f.w, f.h);
     } else {
       ctx.fillStyle = COLORS.paddy;
-      ctx.fillRect(0, 0, W.WIDTH, W.HEIGHT);
+      ctx.fillRect(0, 0, f.w, f.h);
       ctx.strokeStyle = COLORS.paddyLine;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let y = 30; y < W.HEIGHT; y += 30) { ctx.moveTo(0, y); ctx.lineTo(W.WIDTH, y); }
+      for (let y = 30; y < f.h; y += 30) { ctx.moveTo(0, y); ctx.lineTo(f.w, y); }
       ctx.stroke();
     }
 
+    const g = view.ear; // 指で操作するときは稲穂を大きく
     f.items.forEach(function (e) {
       const stage = work.earStage(e);
+      const ex = e.x + hitShake(e, t);
+      const flash = e.hitT > 0 ? e.hitT / work.HIT_FLASH : 0;
       if (stage === 'bumper') {
         // 光る豊作の穂（影のぼかしは重いので、半透明の円を重ねる）
         ctx.fillStyle = 'rgba(255, 230, 120, ' + (0.25 + 0.2 * Math.sin(t * 6 + e.id)) + ')';
         ctx.beginPath();
-        ctx.arc(e.x, e.y, 16, 0, Math.PI * 2);
+        ctx.arc(ex, e.y, 16 * g, 0, Math.PI * 2);
         ctx.fill();
       }
       const sprite = img(stage === 'bumper' ? 'rice_ear_bumper' : 'rice_ear_' + stage);
       if (sprite) {
-        const k = stage === 'bumper' ? 1.4 : 1;
-        ctx.drawImage(sprite, e.x - EAR_W * k / 2, e.y + 16 - EAR_H * k, EAR_W * k, EAR_H * k);
+        const k = (stage === 'bumper' ? 1.4 : 1) * g;
+        const x = ex - EAR_W * k / 2;
+        const y = e.y + 16 * g - EAR_H * k;
+        ctx.drawImage(sprite, x, y, EAR_W * k, EAR_H * k);
+        if (flash > 0) {
+          // 当たった：同じ絵を加算で重ねて光らせる
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.8 * flash;
+          ctx.drawImage(sprite, x, y, EAR_W * k, EAR_H * k);
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = 'source-over';
+        }
         return;
       }
       ctx.strokeStyle = COLORS.stalk;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * g;
       ctx.beginPath();
-      ctx.moveTo(e.x, e.y + 16);
-      ctx.lineTo(e.x, e.y);
+      ctx.moveTo(ex, e.y + 16 * g);
+      ctx.lineTo(ex, e.y);
       ctx.stroke();
-      ctx.fillStyle = stage === 'bumper' ? COLORS.bumper : COLORS.ear[stage];
+      ctx.fillStyle = flash > 0 ? '#fffbe6' : stage === 'bumper' ? COLORS.bumper : COLORS.ear[stage];
       ctx.beginPath();
-      const size = stage === 'bumper' ? 1.4 : 0.8 + 0.15 * stage;
-      ctx.ellipse(e.x + 2, e.y - 2, 4 * size, 8 * size, 0.35, 0, Math.PI * 2);
+      const size = (stage === 'bumper' ? 1.4 : 0.8 + 0.15 * stage) * g;
+      ctx.ellipse(ex + 2 * g, e.y - 2 * g, 4 * size, 8 * size, 0.35, 0, Math.PI * 2);
       ctx.fill();
     });
   }
@@ -157,16 +321,36 @@ window.Game = window.Game || {};
   function drawMine(s, f, t) {
     const bg = img('mine_bg');
     if (bg) {
-      ctx.drawImage(bg, 0, 0, W.WIDTH, W.HEIGHT);
+      drawCover(bg, f.w, f.h);
     } else {
       ctx.fillStyle = COLORS.rockEdge;
-      ctx.fillRect(0, 0, W.WIDTH, W.HEIGHT);
+      ctx.fillRect(0, 0, f.w, f.h);
     }
     const rockImgs = [img('mine_rock_0'), img('mine_rock_1')];
     const veinImg = img('mine_rock_vein');
     f.items.forEach(function (r) {
+      const shake = hitShake(r, t);
+      if (shake) {
+        ctx.save();
+        ctx.translate(shake, 0);
+      }
+      drawRock(r, t, rockImgs, veinImg, f);
+      if (r.hitT > 0) {
+        // 当たった：白く光らせる
+        ctx.fillStyle = 'rgba(255, 248, 225, ' + (0.45 * r.hitT / work.HIT_FLASH) + ')';
+        ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+      }
+      if (shake) ctx.restore();
+    });
+    ctx.fillStyle = COLORS.hint;
+    ctx.font = 'bold ' + Math.round(14 * view.font) + 'px ' + fontFamily;
+    ctx.fillText('深さ ' + fmt.num(s.work.depth) + '間', 8, 18 * view.font);
+  }
+
+  function drawRock(r, t, rockImgs, veinImg, f) {
+    {
       // 深い岩ほど暗く
-      const deep = Math.min(1, r.row / W.MINE.ROWS + (r.depth % W.MINE.DEPTH_STEP) / (W.MINE.DEPTH_STEP * 4));
+      const deep = Math.min(1, r.row / f.rows + (r.depth % W.MINE.DEPTH_STEP) / (W.MINE.DEPTH_STEP * 4));
       const sprite = r.vein && veinImg ? veinImg : rockImgs[deep > 0.5 ? 1 : 0];
       if (sprite) {
         ctx.drawImage(sprite, r.x + 1, r.y + 1, r.w - 2, r.h - 2);
@@ -202,37 +386,61 @@ window.Game = window.Game || {};
         ctx.lineTo(r.x + r.w * 0.8, r.y + r.h * 0.4);
         ctx.stroke();
       }
+    }
+  }
+
+  // 刈れた・砕けた所に、広がって消える光の輪と筋
+  function drawBursts(f) {
+    const k = view.font;
+    f.bursts.forEach(function (b) {
+      const p = b.t / work.BURST_SECONDS;
+      const r = (8 + (b.big ? 40 : 24) * p) * k;
+      ctx.globalAlpha = 1 - p;
+      ctx.strokeStyle = b.big ? '#ffe27a' : '#fff3c4';
+      ctx.lineWidth = 3 * k * (1 - p) + 1;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const ang = i * Math.PI / 3 + 0.3;
+        ctx.moveTo(b.x + Math.cos(ang) * r * 0.6, b.y + Math.sin(ang) * r * 0.6);
+        ctx.lineTo(b.x + Math.cos(ang) * r * 1.25, b.y + Math.sin(ang) * r * 1.25);
+      }
+      ctx.stroke();
     });
-    ctx.fillStyle = COLORS.hint;
-    ctx.font = 'bold 14px ' + fontFamily;
-    ctx.fillText('深さ ' + fmt.num(s.work.depth) + '間', 8, 18);
+    ctx.globalAlpha = 1;
   }
 
   function drawDrops(f) {
     const sprite = img(f.kind === 'rice' ? 'rice_drop' : 'mine_drop');
+    const k = view.font;
     f.drops.forEach(function (d) {
       const p = d.t / W.DROP_SECONDS;
-      const y = d.y - Math.sin(p * Math.PI) * 16; // 少し跳ねる
+      const y = d.y - Math.sin(p * Math.PI) * 16 * k; // 少し跳ねる
       if (sprite) {
-        const size = d.big ? 16 : 11;
+        const size = (d.big ? 16 : 11) * k;
         ctx.drawImage(sprite, d.x - size / 2, y - size / 2, size, size);
         return;
       }
       ctx.fillStyle = f.kind === 'rice' ? '#f4e3a1' : COLORS.vein;
       ctx.beginPath();
-      ctx.arc(d.x, y, d.big ? 6 : 4, 0, Math.PI * 2);
+      ctx.arc(d.x, y, (d.big ? 6 : 4) * k, 0, Math.PI * 2);
       ctx.fill();
     });
   }
 
   function drawPops(f) {
-    ctx.font = 'bold 15px ' + fontFamily;
+    const k = view.font;
+    ctx.font = 'bold ' + Math.round((view.big ? 17 : 15) * k) + 'px ' + fontFamily;
     ctx.textAlign = 'center';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3 * k;
+    ctx.lineJoin = 'round';
     f.pops.forEach(function (p) {
-      const a = 1 - p.t / W.POP_SECONDS;
-      const y = p.y - p.t * 40;
-      ctx.globalAlpha = Math.max(0, a);
+      // 指のときは前半は濃いまま（読めるように）、後半で消す
+      const a = (view.big ? 2 : 1) * (1 - p.t / W.POP_SECONDS);
+      const y = p.y - p.t * 40 * k;
+      ctx.globalAlpha = Math.min(1, Math.max(0, a)); // 1 を超える値は無視されるので収める
       ctx.strokeStyle = COLORS.popEdge;
       ctx.strokeText(p.text, p.x, y);
       ctx.fillStyle = p.big ? COLORS.popBig : COLORS.pop;
@@ -485,34 +693,56 @@ window.Game = window.Game || {};
     if (!f.cursor.inside && !showing) {
       if (!s.work.manualRate[f.kind]) {
         // 画面が縮んでいても読める大きさにする（スマホでは Canvas が半分ほどに縮む）
-        const shrink = W.WIDTH / Math.max(1, els.canvas.clientWidth);
-        const size = Math.round(16 * Math.min(1.9, Math.max(1, shrink)));
+        const shrink = 1 / Math.max(0.01, view.css);
+        const size = view.big ? Math.round(17 * view.font) : Math.round(16 * Math.min(1.9, Math.max(1, shrink)));
         const how = touchUi ? '指でなぞると' : 'カーソルを乗せると';
-        ctx.fillStyle = COLORS.hint;
+        const what = f.kind === 'rice' ? '円の中の稲穂を鎌で刈り取ります' : '円の中の岩をツルハシで砕きます';
+        // 縦長の画面は幅が狭いので2行に分ける
+        const lines = f.tall ? [how + '、', what] : [how + '、' + what];
         ctx.font = 'bold ' + size + 'px ' + fontFamily;
         ctx.textAlign = 'center';
-        ctx.fillText(how + (f.kind === 'rice' ? '、円の中の稲穂を鎌で刈り取ります' : '、円の中の岩をツルハシで砕きます'),
-          W.WIDTH / 2, W.HEIGHT / 2);
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+        lines.forEach(function (text, i) {
+          const ly = f.h / 2 + (i - (lines.length - 1) / 2) * size * 1.4;
+          if (view.big) {
+            // 明るい田んぼの上でも読めるよう縁を付ける
+            ctx.strokeStyle = COLORS.popEdge;
+            ctx.strokeText(text, f.w / 2, ly);
+          }
+          ctx.fillStyle = COLORS.hint;
+          ctx.fillText(text, f.w / 2, ly);
+        });
         ctx.textAlign = 'start';
       }
       return;
     }
     const tool = work.tool(s, f.kind);
     const st = toolStyle(f.kind, index);
+    const ts = view.tool; // 道具の絵の大きさ（指のときは大きく）
+    const radius = tool.radius * f.radiusScale;
     // カーソルが外にあるとき（新調ボタンを押した直後）は、画面の真ん中で見せる
-    const x = f.cursor.inside ? f.cursor.x : W.WIDTH / 2;
-    const y = f.cursor.inside ? f.cursor.y : W.HEIGHT / 2;
+    const x = f.cursor.inside ? f.cursor.x : f.w / 2;
+    const y = f.cursor.inside ? f.cursor.y : f.h / 2;
 
     if (f.cursor.inside) {
-      ctx.strokeStyle = COLORS.ring;
-      ctx.lineWidth = 1.5;
+      // 指のときは円を太く濃くして、どこを刈るか分かるようにする
+      ctx.strokeStyle = view.big ? 'rgba(255, 250, 236, 0.75)' : COLORS.ring;
+      ctx.lineWidth = view.big ? 2.5 / view.css : 1.5;
       ctx.beginPath();
-      ctx.arc(x, y, tool.radius, 0, Math.PI * 2);
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.stroke();
+      if (view.big) {
+        ctx.strokeStyle = 'rgba(42, 38, 34, 0.45)';
+        ctx.lineWidth = 1 / view.css;
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 2 / view.css, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       if (f.strikeFlash > 0) {
         ctx.fillStyle = 'rgba(250, 246, 236, ' + Math.min(0.15, f.strikeFlash) + ')';
         ctx.beginPath();
-        ctx.arc(x, y, tool.radius, 0, Math.PI * 2);
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -521,51 +751,57 @@ window.Game = window.Game || {};
       // 天下の道具は淡く光る
       ctx.fillStyle = 'rgba(255, 214, 90, ' + (0.16 + 0.08 * Math.sin(t * 3)) + ')';
       ctx.beginPath();
-      ctx.arc(x, y, 20, 0, Math.PI * 2);
+      ctx.arc(x, y, 20 * ts, 0, Math.PI * 2);
       ctx.fill();
     }
 
     if (!showing) {
-      drawTool(toolSprite(f.kind, index), x, y, swingAngle(s, f, a, t), 1, 1, 0);
+      drawTool(toolSprite(f.kind, index), x, y, swingAngle(s, f, a, t), ts, 1, 0);
       return;
     }
 
     // ---- 新調の演出：古い道具が光って消え、新しい道具が光りながら現れる ----
     const ease = function (v) { return 1 - Math.pow(1 - Math.min(1, Math.max(0, v)), 3); };
     ctx.strokeStyle = 'rgba(255, 220, 120, ' + (0.85 * (1 - newP)) + ')';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3 * ts;
     ctx.beginPath();
-    ctx.arc(x, y, 14 + 70 * ease(newP), 0, Math.PI * 2);
+    ctx.arc(x, y, (14 + 70 * ease(newP)) * ts, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * ts;
     ctx.beginPath();
     for (let k = 0; k < 8; k++) {
       const ang = k * Math.PI / 4 + newP;
-      const r1 = 22 + 30 * newP;
-      const r2 = 34 + 46 * newP;
+      const r1 = (22 + 30 * newP) * ts;
+      const r2 = (34 + 46 * newP) * ts;
       ctx.moveTo(x + Math.cos(ang) * r1, y + Math.sin(ang) * r1);
       ctx.lineTo(x + Math.cos(ang) * r2, y + Math.sin(ang) * r2);
     }
     ctx.stroke();
     if (newP < 0.3) {
       const q = newP / 0.3;
-      drawTool(toolSprite(f.kind, a.prevIndex), x, y, 0, 1 + 0.3 * q, 1 - q, q);
+      drawTool(toolSprite(f.kind, a.prevIndex), x, y, 0, (1 + 0.3 * q) * ts, 1 - q, q);
     }
     if (newP >= 0.15) {
       const q = (newP - 0.15) / 0.85;
-      drawTool(toolSprite(f.kind, index), x, y, 0, 1.6 - 0.6 * ease(q * 1.6), Math.min(1, q * 3), 1 - q);
+      drawTool(toolSprite(f.kind, index), x, y, 0, (1.6 - 0.6 * ease(q * 1.6)) * ts, Math.min(1, q * 3), 1 - q);
     }
     // 新しい道具の名前
-    ctx.font = 'bold 16px ' + fontFamily;
+    const fs = Math.round(16 * view.font);
+    ctx.font = 'bold ' + fs + 'px ' + fontFamily;
     ctx.textAlign = 'center';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3 * view.font;
     ctx.globalAlpha = Math.min(1, (1 - newP) * 3);
     const label = work.toolNames(f.kind)[index] + 'を新調！';
-    const ly = y - 46 < 18 ? y + 62 : y - 46;
+    const above = y - 46 * ts;
+    let ly = above < fs + 2 ? y + 62 * ts : above;
+    // 縦長の画面は幅が狭いので、名前がはみ出さないよう真ん中に寄せる
+    const half = ctx.measureText(label).width / 2 + 4;
+    const lx = Math.min(f.w - half, Math.max(half, x));
+    ly = Math.min(f.h - 4, ly);
     ctx.strokeStyle = COLORS.popEdge;
-    ctx.strokeText(label, x, ly);
+    ctx.strokeText(label, lx, ly);
     ctx.fillStyle = COLORS.popBig;
-    ctx.fillText(label, x, ly);
+    ctx.fillText(label, lx, ly);
     ctx.globalAlpha = 1;
     ctx.textAlign = 'start';
   }
@@ -607,6 +843,8 @@ window.Game = window.Game || {};
   }
 
   function update(s) {
+    const vib = s.settings.vibrate !== false;
+    if (els.vibrate.checked !== vib) els.vibrate.checked = vib;
     const mine = work.mineUnlocked(s);
     const kind = s.work.view === 'mine' && mine ? 'mine' : 'rice';
     setClass(els.switchBox, 'hidden', !mine);
@@ -667,29 +905,56 @@ window.Game = window.Game || {};
     ctx = els.canvas.getContext('2d');
     fontFamily = getComputedStyle(document.body).fontFamily;
 
-    // 画面の大きさに合わせて縮んでいても、Canvas の座標に直す
-    const move = function (e) {
-      const rect = els.canvas.getBoundingClientRect();
-      cursor.x = (e.clientX - rect.left) * (W.WIDTH / rect.width);
-      cursor.y = (e.clientY - rect.top) * (W.HEIGHT / rect.height);
-      cursor.inside = true;
-    };
-    // マウスは乗せている間、指は触れている間だけ道具を出す（指でなぞって刈る・掘る）
+    // 位置は画面の座標で覚えておき、毎フレーム作業画面の座標に直す（placeCursor）
+    // マウスは乗せている間、指は触れている間だけ道具を出す（指でなぞって刈る・掘る。置いたままでも打ち続ける）
     // 指で触れている間は画面がスクロールしないよう、CSS で touch-action: none にしてある
-    const leave = function (e) {
-      if (e.pointerType === 'mouse' && e.type !== 'pointerleave') return;
-      cursor.inside = false;
+    const set = function (e) {
+      pointer.cx = e.clientX;
+      pointer.cy = e.clientY;
+      pointer.touch = e.pointerType === 'touch';
+      pointer.inside = true;
+    };
+    const move = function (e) {
+      // 指は、触れている指（最初の1本）だけを追う
+      if (e.pointerType === 'touch' && e.pointerId !== pointer.id) return;
+      set(e);
+    };
+    const end = function (e) {
+      if (e.pointerType === 'mouse') {
+        if (e.type === 'pointerleave') pointer.inside = false;
+        return;
+      }
+      // 指は作業画面の外へ動いても、離すまで続ける（指より上に道具を出すので、下の端を刈るには外まで動かす）
+      if (e.pointerType === 'touch' && (e.type === 'pointerleave' || e.pointerId !== pointer.id)) return;
+      pointer.inside = false;
+      pointer.id = null;
     };
     els.canvas.addEventListener('pointermove', move);
-    els.canvas.addEventListener('pointerenter', move);
+    els.canvas.addEventListener('pointerenter', function (e) { if (e.pointerType !== 'touch') move(e); });
     els.canvas.addEventListener('pointerdown', function (e) {
       touchUi = e.pointerType !== 'mouse';
-      move(e);
       if (e.pointerType !== 'mouse') e.preventDefault();
+      if (e.pointerType === 'touch') {
+        if (pointer.id !== null && pointer.inside) return; // 2本目の指は無視
+        pointer.id = e.pointerId;
+        try { els.canvas.setPointerCapture(e.pointerId); } catch (err) { /* 古いブラウザ */ }
+      }
+      set(e);
     });
-    els.canvas.addEventListener('pointerleave', leave);
-    els.canvas.addEventListener('pointerup', leave);
-    els.canvas.addEventListener('pointercancel', leave);
+    els.canvas.addEventListener('pointerleave', end);
+    els.canvas.addEventListener('pointerup', end);
+    els.canvas.addEventListener('pointercancel', end);
+    els.canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); }); // 長押しでメニューを出さない
+
+    // 設定タブ：刈れた・掘れたときに震える
+    els.vibrate = $('vibrate-check');
+    els.vibrateRow = $('vibrate-row');
+    els.vibrate.addEventListener('change', function () {
+      cur().settings.vibrate = els.vibrate.checked;
+      if (els.vibrate.checked && navigator.vibrate) {
+        try { navigator.vibrate(30); } catch (err) { /* 震えられない端末 */ }
+      }
+    });
 
     els.viewRice.addEventListener('click', function () { setView('rice'); });
     els.viewMine.addEventListener('click', function () { setView('mine'); });
@@ -708,5 +973,6 @@ window.Game = window.Game || {};
     });
   }
 
-  Game.workView = { init: init, update: update };
+  // field：いま画面に出している作業画面の中身（確かめるとき用）
+  Game.workView = { init: init, update: update, field: function () { return shownField; }, view: view };
 })();

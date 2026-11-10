@@ -75,7 +75,7 @@ window.Game = window.Game || {};
       nextInvasionId: 1,
       battles: [],       // 進行中の合戦（攻城戦・防衛戦・野戦。采配の効果時間・クールダウン）
       flags: { firstVictory: false, unified: false, endingSeen: false },
-      settings: { bulk: cfg.DEFAULT_BULK, autoBuild: true }, // autoBuild：自動普請のON/OFF
+      settings: { bulk: cfg.DEFAULT_BULK, autoBuild: true, vibrate: true }, // autoBuild：自動普請のON/OFF。vibrate：稲刈り・金山で取れたときに震える（Android）
       stats: { playTime: 0, battlesWon: 0, stageLog: [] }, // stageLog：この周で段階に入った代と時間 [{ stage, generation, time }]
     };
   }
