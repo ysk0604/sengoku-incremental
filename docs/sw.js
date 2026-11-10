@@ -1,7 +1,7 @@
 // Service Worker：オフラインでも遊べるように、ゲームのファイルを端末に保存しておく（PWA。ステップ8）
 // 公開するときは tools/build_public.sh が docs/ の sw.js の CACHE を作った日時に変える（古い保存は消え、新しいファイルに入れ替わる）
 // 画像を足したり名前を変えたりしたときは、下の IMAGES も直す（assets/img/ の一覧と同じにする）
-const CACHE = 'sengoku-20261027-225514';
+const CACHE = 'sengoku-20261110-213822';
 
 // 起動に必要なもの（1つでも取れなければ入れ直す）
 const CORE = [
